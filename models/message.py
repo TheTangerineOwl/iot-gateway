@@ -28,3 +28,15 @@ class Message:
     timestamp: float = field(default_factory=time)
     processed: bool = False
     value: Any = ''
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            'message_id': self.message_id,
+            'message_type': self.message_type.value,
+            'device_id': self.device_id,
+            'protocol': self.protocol,
+            'payload': self.payload,
+            'timestamp': self.timestamp,
+            'processed': self.processed,
+            'value': self.value
+        }

@@ -33,20 +33,20 @@ class DeviceRegistry:
 
             if is_new:
                 print(
-                    "Device registered: %s (%s, protocol %s)",
-                    device.device_id, device.name, device.protocol,
+                    f"Device registered: {device.device_id} "
+                    f"({device.name}, protocol {device.protocol})"
                 )
                 for cb in self.on_register_callbacks:
                     await cb(device)
             else:
-                print("Device updated: %s", device.device_id)
+                print(f"Device updated: {device.device_id}")
         return device
 
     async def unregister(self, device_id: str):
         async with self.lock:
             device = self.devices.pop(device_id, None)
             if device:
-                print("Device unregistered: %s", device_id)
+                print(f"Device unregistered: {device_id}")
                 for cb in self.on_unregister_callbacks:
                     await cb(device)
         return device
@@ -54,7 +54,7 @@ class DeviceRegistry:
     async def update_status(self, device_id: str, status: DeviceStatus):
         device = self.devices.get(device_id)
         if device is None:
-            print("Cannot update status: device %s not found", device_id)
+            print(f"Cannot update status: device {device_id} not found")
             return
 
         old_status = device.device_status
@@ -62,8 +62,8 @@ class DeviceRegistry:
             device.device_status = status
             device.touch()
             print(
-                "Device %s status change: %s -> %s",
-                device_id, old_status.value, status.value,
+                f"Device {device_id} status change: "
+                f"{old_status.value} -> {status.value}",
             )
             for cb in self.on_status_change_callbacks:
                 await cb(device, old_status, status)

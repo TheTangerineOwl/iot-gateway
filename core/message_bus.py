@@ -51,7 +51,7 @@ class MessageBus:
         )
         self.subscriptions.append(sub)
         self.subscriptions.sort(key=lambda s: s.priority, reverse=True)
-        print("Subscribed (type: %s, priority=%d)", mes_type, priority)
+        print(f"Added subscriber on topic {mes_type}, priority={priority})")
         return sub
 
     def unsubscribe(self, subscription: Subscription) -> None:
@@ -75,12 +75,12 @@ class MessageBus:
                     self.delivered_count += 1
                 except Exception:
                     print(
-                        "Handler error on topic '%s'", mes_type
+                        f"Handler error on topic '{mes_type}'"
                     )
                     self.error_count += 1
 
         if not matched:
-            print("No subscribers for topic: %s", mes_type)
+            print(f"No subscribers for topic '{mes_type}'")
 
     async def process_queue(self):
         while self.running:
@@ -108,8 +108,8 @@ class MessageBus:
             await self.task
             self.task = None
         print(
-            "MessageBus stopped. Published=%d Delivered=%d Errors=%d",
-            self.published_count,
-            self.delivered_count,
-            self.error_count,
+            f"MessageBus stopped. "
+            f"Published={self.published_count} "
+            f"Delivered={self.delivered_count} "
+            f"Errors={self.error_count}"
         )

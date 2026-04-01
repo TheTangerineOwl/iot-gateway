@@ -20,9 +20,6 @@ class HTTPAdapter(ProtocolAdapter):
         self.port = 8081
         self.webhook = "/api/v1/ingest"
 
-        # self.app = None
-        # self.runner = None
-
     @property
     def protocol_name(self) -> str:
         return "http"
@@ -49,7 +46,7 @@ class HTTPAdapter(ProtocolAdapter):
         await site.start()
 
         self.running = True
-        print("HTTP adapter listening on %s:%d", self.host, self.port)
+        print(f"HTTP adapter listening on {self.host}:{self.port}")
 
     async def stop(self) -> None:
         """Остановить HTTP-сервер."""
@@ -100,11 +97,11 @@ class HTTPAdapter(ProtocolAdapter):
             message_topic="/api/v1/devices/register",
             payload=body,
         )
-
+        # message.message_topic = f"device.register.{message.device_id}"
         await self.publish_message(
             f"device.register.{message.device_id}",
-            message)
-
+            message
+        )
         return web.json_response({"status": "registered"}, status=201)
 
     async def handle_health(self, request) -> Any:

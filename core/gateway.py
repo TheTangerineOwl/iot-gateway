@@ -65,7 +65,7 @@ class Gateway:
             registry=self.registry,
         )
         self.adapters[name] = adapter
-        print("Protocol adapter registered: %s", name)
+        print(f"Protocol adapter registered: {name}")
 
     async def start(self) -> None:
         print('Starting gateway')
@@ -82,12 +82,12 @@ class Gateway:
         for name, adapter in self.adapters.items():
             try:
                 await adapter.start()
-                print("Adapter '%s' started", name)
+                print(f"Adapter '{name}' started")
             except Exception as exc:
-                print("Failed to start adapter '%s': %s", name, exc)
+                print(f"Failed to start adapter '{name}': {exc}")
 
         self.running = True
-        print("Gateway started. Adapters: %s", list(self.adapters.keys()))
+        print(f"Gateway started. Adapters: {list(self.adapters.keys())}")
 
     async def stop(self) -> None:
         print("Stopping gateway")
@@ -96,9 +96,9 @@ class Gateway:
         for name, adapter in reversed(list(self.adapters.items())):
             try:
                 await adapter.stop()
-                print("Adapter '%s' stopped", name)
+                print(f"Adapter '{name}' stopped")
             except Exception as exc:
-                print("Error stopping adapter '%s': %s", name, exc)
+                print(f"Error stopping adapter '{name}': {exc}")
 
         await self.registry.stop_monitor()
         await self.pipeline.teardown()

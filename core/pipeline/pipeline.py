@@ -20,7 +20,7 @@ class Pipeline:
 
     def add_stage(self, stage: PipelineStage):
         self.stages.append(stage)
-        print("Pipeline stage added: %s", stage.name)
+        print(f"Pipeline stage added: {stage.name}")
 
     def remove_stage(self, stage_name: str) -> None:
         self.stages = [s for s in self.stages if s.name != stage_name]
@@ -29,9 +29,8 @@ class Pipeline:
         for stage in self.stages:
             await stage.setup()
         print(
-            "Pipeline initialized with %d stages: %s",
-            len(self.stages),
-            [s.name for s in self.stages],
+            f"Pipeline initialized with {len(self.stages)} "
+            f"stages: {[s.name for s in self.stages]}"
         )
 
     async def teardown(self) -> None:
@@ -47,16 +46,16 @@ class Pipeline:
                 if result is None:
                     self.filtered_count += 1
                     print(
-                        "Message %s filtered at stage '%s'",
-                        message.message_id, stage.name,
+                        f"Message {message.message_id} "
+                        f"filtered at stage '{stage.name}'"
                     )
                     return None
                 current = result
             except Exception:
                 self.error_count += 1
                 print(
-                    "Pipeline error at stage '%s' for message %s: %s",
-                    stage.name, message.message_id
+                    f"Pipeline error at stage '{stage.name}' "
+                    f"for message {stage.name}: {message.message_id}"
                 )
 
         current.processed = True

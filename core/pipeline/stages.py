@@ -33,7 +33,7 @@ class ValidationStage(PipelineStage):
             return None
         if not message.payload:
             print(
-                "Message discarded: empty payload from %s", message.device_id
+                f"Message discarded: empty payload from {message.device_id}"
             )
             return None
         return message
