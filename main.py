@@ -1,11 +1,12 @@
 import asyncio
 import sys
 from core.gateway import Gateway
+from protocols.http_adapter import HTTPAdapter
 
 
 def register_adapters(gateway: Gateway):
-    # adapter =
-    # gateway.register_adapter(adapter)
+    adapter = HTTPAdapter()
+    gateway.register_adapter(adapter)
     pass
 
 

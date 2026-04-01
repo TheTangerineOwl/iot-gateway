@@ -1,5 +1,5 @@
 from models.message import Message
-from stages import PipelineStage
+from .stages import PipelineStage
 
 
 class Pipeline:

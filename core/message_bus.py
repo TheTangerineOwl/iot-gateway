@@ -92,7 +92,7 @@ class MessageBus:
                 continue
             if type is None:
                 break
-            await self.dispatch(message)
+            await self.dispatch(type, message)
 
     async def start(self):
         if self.running:
