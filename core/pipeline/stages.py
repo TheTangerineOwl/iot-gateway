@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
+import logging
 from typing import Any
 from models.message import Message
+
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineStage(ABC):
@@ -29,11 +33,11 @@ class ValidationStage(PipelineStage):
 
     async def process(self, message: Message) -> Message | None:
         if not message.device_id:
-            print("Message discarded: no device_id")
+            logger.info("Message discarded: no device_id")
             return None
         if not message.payload:
-            print(
-                f"Message discarded: empty payload from {message.device_id}"
+            logger.info(
+                "Message discarded: empty payload from %d", message.device_id
             )
             return None
         return message

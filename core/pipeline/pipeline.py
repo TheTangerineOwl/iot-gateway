@@ -1,5 +1,9 @@
+import logging
 from models.message import Message
 from .stages import PipelineStage
+
+
+logger = logging.getLogger(__name__)
 
 
 class Pipeline:
@@ -20,7 +24,7 @@ class Pipeline:
 
     def add_stage(self, stage: PipelineStage):
         self.stages.append(stage)
-        print(f"Pipeline stage added: {stage.name}")
+        logger.info("Pipeline stage added: %s", stage.name)
 
     def remove_stage(self, stage_name: str) -> None:
         self.stages = [s for s in self.stages if s.name != stage_name]
@@ -28,9 +32,10 @@ class Pipeline:
     async def setup(self):
         for stage in self.stages:
             await stage.setup()
-        print(
-            f"Pipeline initialized with {len(self.stages)} "
-            f"stages: {[s.name for s in self.stages]}"
+        logger.info(
+            "Pipeline initialized with %d stages: %s",
+            len(self.stages),
+            [s.name for s in self.stages]
         )
 
     async def teardown(self) -> None:
@@ -45,17 +50,19 @@ class Pipeline:
                 result = await stage.process(current)
                 if result is None:
                     self.filtered_count += 1
-                    print(
-                        f"Message {message.message_id} "
-                        f"filtered at stage '{stage.name}'"
+                    logger.info(
+                        "Message %s filtered at stage '%s'",
+                        message.message_id,
+                        stage.name
                     )
                     return None
                 current = result
-            except Exception:
+            except Exception as ex:
                 self.error_count += 1
-                print(
-                    f"Pipeline error at stage '{stage.name}' "
-                    f"for message {stage.name}: {message.message_id}"
+                logger.error(
+                    "Pipeline error at stage '%s' "
+                    "for message %s: %s",
+                    stage.name, message.message_id, ex, exc_info=True
                 )
 
         current.processed = True

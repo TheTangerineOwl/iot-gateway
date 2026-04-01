@@ -1,8 +1,12 @@
 import asyncio
 from fnmatch import fnmatch
 from dataclasses import dataclass
+import logging
 from models.message import Message
 from typing import Any, Callable, Coroutine
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -51,7 +55,10 @@ class MessageBus:
         )
         self.subscriptions.append(sub)
         self.subscriptions.sort(key=lambda s: s.priority, reverse=True)
-        print(f"Added subscriber on topic {mes_type}, priority={priority})")
+        logger.debug(
+            "Added subscriber on topic '%s', priority=%d",
+            mes_type, priority
+        )
         return sub
 
     def unsubscribe(self, subscription: Subscription) -> None:
@@ -73,14 +80,15 @@ class MessageBus:
                 try:
                     await sub.handler(message)
                     self.delivered_count += 1
-                except Exception:
-                    print(
-                        f"Handler error on topic '{mes_type}'"
+                except Exception as ex:
+                    logger.error(
+                        "Handler error on topic '%s': %s",
+                        mes_type, ex, exc_info=True
                     )
                     self.error_count += 1
 
         if not matched:
-            print(f"No subscribers for topic '{mes_type}'")
+            logger.warning("No subscribers for topic '%s'", mes_type)
 
     async def process_queue(self):
         while self.running:
@@ -99,7 +107,7 @@ class MessageBus:
             return
         self.running = True
         self.task = asyncio.create_task(self.process_queue())
-        print('Bus started')
+        logger.debug('Bus started')
 
     async def stop(self):
         self.running = False
@@ -107,9 +115,12 @@ class MessageBus:
             await self.queue.put((None, None))
             await self.task
             self.task = None
-        print(
-            f"MessageBus stopped. "
-            f"Published={self.published_count} "
-            f"Delivered={self.delivered_count} "
-            f"Errors={self.error_count}"
+        logger.info(
+            "MessageBus stopped. "
+            "Published = %d "
+            "Delivered = %d "
+            "Errors = %d",
+            self.published_count,
+            self.delivered_count,
+            self.error_count
         )

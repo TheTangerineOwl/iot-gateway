@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
+import logging
 from models.message import Message
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
-from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProtocolAdapter(ABC):

@@ -1,5 +1,9 @@
 import asyncio
+import logging
 from models.device import Device, DeviceStatus, DeviceType
+
+
+logger = logging.getLogger(__name__)
 
 
 class DeviceRegistry:
@@ -32,21 +36,23 @@ class DeviceRegistry:
             self.devices[device.device_id] = device
 
             if is_new:
-                print(
-                    f"Device registered: {device.device_id} "
-                    f"({device.name}, protocol {device.protocol})"
+                logger.info(
+                    "Device registered: %s "
+                    "(%s, protocol %s)",
+                    device.device_id,
+                    device.name, device.protocol
                 )
                 for cb in self.on_register_callbacks:
                     await cb(device)
             else:
-                print(f"Device updated: {device.device_id}")
+                logger.info("Device updated: %s", device.device_id)
         return device
 
     async def unregister(self, device_id: str):
         async with self.lock:
             device = self.devices.pop(device_id, None)
             if device:
-                print(f"Device unregistered: {device_id}")
+                logger.info("Device unregistered: %s", device_id)
                 for cb in self.on_unregister_callbacks:
                     await cb(device)
         return device
@@ -54,16 +60,20 @@ class DeviceRegistry:
     async def update_status(self, device_id: str, status: DeviceStatus):
         device = self.devices.get(device_id)
         if device is None:
-            print(f"Cannot update status: device {device_id} not found")
+            logger.warning(
+                "Cannot update status: device %s not found",
+                device_id
+            )
             return
 
         old_status = device.device_status
         if old_status != status:
             device.device_status = status
             device.touch()
-            print(
-                f"Device {device_id} status change: "
-                f"{old_status.value} -> {status.value}",
+            logger.info(
+                "Device %s status change: "
+                "%s -> %s",
+                device_id, old_status.value, status.value
             )
             for cb in self.on_status_change_callbacks:
                 await cb(device, old_status, status)

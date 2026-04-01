@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import signal
 from typing import Any
 
@@ -9,6 +10,9 @@ from core.pipeline.stages import (ValidationStage)
 from models.device import DeviceStatus, Device
 from models.message import Message, MessageType
 from protocols.adapter import ProtocolAdapter
+
+
+logger = logging.getLogger(__name__)
 
 
 class Gateway:
@@ -65,10 +69,10 @@ class Gateway:
             registry=self.registry,
         )
         self.adapters[name] = adapter
-        print(f"Protocol adapter registered: {name}")
+        logger.debug("Protocol adapter registered: %s", name)
 
     async def start(self) -> None:
-        print('Starting gateway')
+        logger.info('Starting gateway')
 
         await self.bus.start()
 
@@ -82,29 +86,40 @@ class Gateway:
         for name, adapter in self.adapters.items():
             try:
                 await adapter.start()
-                print(f"Adapter '{name}' started")
+                logger.debug("Adapter '%s' started", name)
             except Exception as exc:
-                print(f"Failed to start adapter '{name}': {exc}")
+                logger.error(
+                    "Failed to start adapter '%s': %s",
+                    name,
+                    exc,
+                    exc_info=True
+                )
 
         self.running = True
-        print(f"Gateway started. Adapters: {list(self.adapters.keys())}")
+        logger.info(
+            "Gateway started. Adapters: %s",
+            list(self.adapters.keys())
+        )
 
     async def stop(self) -> None:
-        print("Stopping gateway")
+        logger.info("Stoping gateway")
         self._running = False
 
         for name, adapter in reversed(list(self.adapters.items())):
             try:
                 await adapter.stop()
-                print(f"Adapter '{name}' stopped")
+                logger.debug("Adapter '%s' stopped", name)
             except Exception as exc:
-                print(f"Error stopping adapter '{name}': {exc}")
+                logger.error(
+                    "Error stopping adapter '%s': %s",
+                    name, exc, exc_info=True
+                )
 
         await self.registry.stop_monitor()
         await self.pipeline.teardown()
         await self.bus.stop()
 
-        print("Gateway stopped")
+        logger.info("Gateway stopped")
 
     async def run_forever(self) -> None:
         await self.start()
@@ -112,7 +127,7 @@ class Gateway:
         stop_event = asyncio.Event()
 
         def signal_handler():
-            print("Received shutdown signal")
+            logger.info("Received shutdown signal")
             stop_event.set()
 
         loop = asyncio.get_running_loop()

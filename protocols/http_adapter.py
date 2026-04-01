@@ -3,14 +3,16 @@
     POST /api/v1/devices/register регистрация устройства
     GET /api/v1/health чек
 """
-
-import asyncio
 from aiohttp import web
 import json
+import logging
 from typing import Any
 
 from models.message import Message, MessageType
 from protocols.adapter import ProtocolAdapter
+
+
+logger = logging.getLogger(__name__)
 
 
 class HTTPAdapter(ProtocolAdapter):
@@ -46,14 +48,17 @@ class HTTPAdapter(ProtocolAdapter):
         await site.start()
 
         self.running = True
-        print(f"HTTP adapter listening on {self.host}:{self.port}")
+        logger.info(
+            "HTTP adapter listening on %s:%d",
+            self.host, self.port
+        )
 
     async def stop(self) -> None:
         """Остановить HTTP-сервер."""
         self.running = False
         if self.runner:
             await self.runner.cleanup()
-        print("HTTP adapter stopped")
+        logger.info("HTTP adapter stopped")
 
     async def handle_ingest(self, request) -> Any:
         """Приём телеметрии."""

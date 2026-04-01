@@ -1,8 +1,12 @@
 from dataclasses import dataclass, field
 from enum import Enum
+import logging
 from time import time
 from typing import Any
 from uuid import uuid4
+
+
+logger = logging.getLogger(__name__)
 
 
 class MessageType(str, Enum):
