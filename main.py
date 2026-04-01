@@ -1,10 +1,18 @@
 import asyncio
 import sys
+from core.gateway import Gateway
+
+
+def register_adapters(gateway: Gateway):
+    # adapter =
+    # gateway.register_adapter(adapter)
+    pass
 
 
 async def main():
-    # await
-    pass
+    gateway = Gateway()
+    register_adapters(gateway)
+    await gateway.run_forever()
 
 
 if __name__ == '__main__':

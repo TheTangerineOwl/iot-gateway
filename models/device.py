@@ -51,3 +51,26 @@ class Device:
         if self.last_response == 0.0:
             return True
         return (time() - self.last_response) > timeout
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "device_id": self.device_id,
+            "name": self.name,
+            "device_type": self.device_type.value,
+            "protocol": self.protocol,
+            "status": self.device_status.value,
+            "last_response": self.last_response,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]):
+        return cls(
+            device_id=data.get("device_id", str(uuid.uuid4())),
+            name=data.get("name", ""),
+            device_type=DeviceType(data.get("device_type", "unknown")),
+            protocol=data.get("protocol", "unknown"),
+            device_status=DeviceStatus(data.get("device_status", "offline")),
+            last_response=data.get("last_response", 0.0),
+            created_at=data.get("created_at", time()),
+        )

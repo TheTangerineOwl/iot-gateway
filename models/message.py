@@ -21,6 +21,7 @@ class Message:
     """Сообщение с устройства."""
     message_id: str = field(default_factory=lambda: str(uuid4()))
     message_type: MessageType = MessageType.TELEMETRY
+    message_topic: str = ''
     device_id: str = ''
     protocol: str = ''
     payload: dict[str, Any] = field(default_factory=dict)
