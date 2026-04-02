@@ -1,3 +1,4 @@
+"""Настройка окружения и конфигурации программы."""
 from typenv import Env
 import logging
 
@@ -14,11 +15,12 @@ SEV_DICT = {
 LOG_DEFAULT = logging.INFO
 
 
-def get_log_severity():
+def get_log_severity() -> str | int:
+    """Получить уровень логирования из окружения."""
     debug = env.bool('DEBUG', default=False)
     if debug:
         return logging.DEBUG
-    level = str(env.str('LOG_SEVERITY', default=LOG_DEFAULT)).upper()
+    level = str(env.str('LOG_SEVERITY', default=str(LOG_DEFAULT))).upper()
     if level.isalpha():
         level_num = SEV_DICT.get(level, LOG_DEFAULT)
         return level_num
@@ -27,7 +29,8 @@ def get_log_severity():
     return LOG_DEFAULT
 
 
-def load_env(env_path: str):
+def load_env(env_path: str) -> None:
+    """Загрузить переменные окружения из указанного файла."""
     try:
         loaded = env.read_env(env_path)
         logger.debug('Loading .env from %s', env_path)

@@ -1,3 +1,4 @@
+"""Шина сообщений для взаимодействия."""
 import asyncio
 from fnmatch import fnmatch
 from dataclasses import dataclass
@@ -13,35 +14,47 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Subscription:
+    """Подписка на тему сообщения."""
+
     handler: Callable[[Message], Coroutine[Any, Any, None]]
     mes_type: str
     priority: int = 0
 
     def matches(self, topic: str) -> bool:
+        """
+        Проверка темы сообщения.
+
+        Проверяет, соответствует ли тема сообщению заданной теме подписки
+        с поддержкой wildcard (* в теме).
+        """
         return fnmatch(topic, self.mes_type)
 
 
 class MessageBus:
+    """Шина сообщений для взаимодействия модулей."""
+
     def __init__(self, max_queue: int = 10000):
-        self.queue: asyncio.Queue[tuple[str, Message]] = asyncio.Queue(
+        """Шина сообщений."""
+        self._queue: asyncio.Queue[tuple[str, Message]] = asyncio.Queue(
             maxsize=max_queue
         )
-        self.subscriptions: list[Subscription] = []
-        self.running = False
-        self.task: asyncio.Task | None = None
+        self._subscriptions: list[Subscription] = []
+        self._running = False
+        self._task: asyncio.Task | None = None
 
-        self.published_count = 0
-        self.delivered_count = 0
-        self.error_count = 0
+        self._published_count = 0
+        self._delivered_count = 0
+        self._error_count = 0
 
     @property
     def stats(self) -> dict[str, int]:
+        """Статистика работы шины сообщений."""
         return {
-            "published": self.published_count,
-            "delivered": self.delivered_count,
-            "errors": self.error_count,
-            "queue_size": self.queue.qsize(),
-            "subscribers": len(self.subscriptions),
+            "published": self._published_count,
+            "delivered": self._delivered_count,
+            "errors": self._error_count,
+            "queue_size": self._queue.qsize(),
+            "subscribers": len(self._subscriptions),
         }
 
     def subscribe(
@@ -50,13 +63,14 @@ class MessageBus:
         handler: Callable[[Message], Coroutine[Any, Any, None]],
         priority: int = 0,
     ) -> Subscription:
+        """Добавить обработчик на сообщения с заданной темой."""
         sub = Subscription(
             mes_type=mes_type,
             handler=handler,
             priority=priority,
         )
-        self.subscriptions.append(sub)
-        self.subscriptions.sort(key=lambda s: s.priority, reverse=True)
+        self._subscriptions.append(sub)
+        self._subscriptions.sort(key=lambda s: s.priority, reverse=True)
         logger.debug(
             "Added subscriber on topic '%s', priority=%d",
             mes_type, priority
@@ -64,66 +78,73 @@ class MessageBus:
         return sub
 
     def unsubscribe(self, subscription: Subscription) -> None:
-        self.subscriptions.remove(subscription)
+        """Удалить обработчик сообщений с заданной темой."""
+        self._subscriptions.remove(subscription)
 
     async def publish(self, mes_type: str, message: Message) -> None:
-        await self.queue.put((mes_type, message))
-        self.published_count += 1
+        """Поместить сообщение в очередь."""
+        await self._queue.put((mes_type, message))
+        self._published_count += 1
 
     def publish_nowait(self, mes_type, message: Message) -> None:
-        self.queue.put_nowait((mes_type, message))
-        self.published_count += 1
+        """Поместить сообщение в очередь (ошибка, если очередь полна)."""
+        self._queue.put_nowait((mes_type, message))
+        self._published_count += 1
 
-    async def dispatch(self, mes_type: str, message: Message):
+    async def _dispatch(self, mes_type: str, message: Message):
+        """Передать сообщение подписчикам."""
         matched = False
-        for sub in self.subscriptions:
+        for sub in self._subscriptions:
             if sub.matches(mes_type):
                 matched = True
                 try:
                     await sub.handler(message)
-                    self.delivered_count += 1
+                    self._delivered_count += 1
                 except Exception as ex:
                     logger.error(
                         "Handler error on topic '%s': %s",
                         mes_type, ex, exc_info=True
                     )
-                    self.error_count += 1
+                    self._error_count += 1
 
         if not matched:
             logger.warning("No subscribers for topic '%s'", mes_type)
 
-    async def process_queue(self):
-        while self.running:
+    async def _process_queue(self):
+        """Обработать очередь сообщений."""
+        while self._running:
             try:
                 type, message = await asyncio.wait_for(
-                    self.queue.get(),
+                    self._queue.get(),
                     timeout=env.float('MESQ_TIMEOUT', default=1.0)
                 )
             except asyncio.TimeoutError:
                 continue
             if type is None:
                 break
-            await self.dispatch(type, message)
+            await self._dispatch(type, message)
 
     async def start(self):
-        if self.running:
+        """Запуск шины сообщений."""
+        if self._running:
             return
-        self.running = True
-        self.task = asyncio.create_task(self.process_queue())
+        self._running = True
+        self._task = asyncio.create_task(self._process_queue())
         logger.debug('Bus started')
 
     async def stop(self):
-        self.running = False
-        if self.task:
-            await self.queue.put((None, None))
-            await self.task
-            self.task = None
+        """Остановка шины сообщений и вывод статистики."""
+        self._running = False
+        if self._task:
+            await self._queue.put((None, None))
+            await self._task
+            self._task = None
         logger.info(
             "MessageBus stopped. "
             "Published = %d "
             "Delivered = %d "
             "Errors = %d",
-            self.published_count,
-            self.delivered_count,
-            self.error_count
+            self._published_count,
+            self._delivered_count,
+            self._error_count
         )

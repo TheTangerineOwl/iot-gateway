@@ -1,3 +1,4 @@
+"""Точка входа в приложение шлюза."""
 import asyncio
 from datetime import datetime
 import logging
@@ -13,11 +14,18 @@ ENV_PATH = BASE_DIR / '.env'
 
 
 def register_adapters(gateway: Gateway):
+    """Зарегистрировать адаптеры для протоколов."""
     adapter = HTTPAdapter()
     gateway.register_adapter(adapter)
 
 
 async def main():
+    """
+    Запуск приложения работы шлюза.
+
+    Инициализирует шлюз, задает логирование, регистрирует адаптеры
+    и запускает бесконечный цикл работы.
+    """
     gateway = Gateway()
 
     load_env(ENV_PATH)

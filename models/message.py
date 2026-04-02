@@ -1,3 +1,4 @@
+"""Модуль сообщения."""
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class MessageType(str, Enum):
     """Тип сообщения в системе."""
+
     TELEMETRY = "telemetry"
     COMMAND = "command"
     COMMAND_RESPONSE = "command_response"
@@ -23,6 +25,7 @@ class MessageType(str, Enum):
 @dataclass
 class Message:
     """Сообщение с устройства."""
+
     message_id: str = field(default_factory=lambda: str(uuid4()))
     message_type: MessageType = MessageType.TELEMETRY
     message_topic: str = ''
@@ -34,6 +37,7 @@ class Message:
     value: Any = ''
 
     def to_dict(self) -> dict[str, Any]:
+        """Получить данные сообщения."""
         return {
             'message_id': self.message_id,
             'message_type': self.message_type.value,

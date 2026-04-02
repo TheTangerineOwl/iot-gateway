@@ -1,3 +1,4 @@
+"""Модуль девайса."""
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class DeviceStatus(str, Enum):
     """Текущий статус устройства."""
+
     ONLINE = 'online'
     OFFLINE = 'offline'
     ERROR = 'error'
@@ -20,6 +22,7 @@ class DeviceStatus(str, Enum):
 
 class DeviceType(str, Enum):
     """Тип устройства."""
+
     SENSOR = 'sensor'
     ACTUATOR = 'actuator'
     CONTROLLER = 'controller'
@@ -29,6 +32,7 @@ class DeviceType(str, Enum):
 
 class ProtocolType(str, Enum):
     """Тип протокола."""
+
     HTTP = 'http'
     MQTT = 'mqtt'
     MODBUS = 'modbus'
@@ -38,6 +42,7 @@ class ProtocolType(str, Enum):
 @dataclass
 class Device:
     """Подключенное устройство."""
+
     device_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ''
     device_type: DeviceType = DeviceType.UNKNOWN
@@ -57,11 +62,12 @@ class Device:
         return (time() - self.last_response) > timeout
 
     def to_dict(self) -> dict[str, Any]:
+        """Вывод информации о девайсе."""
         return {
             "device_id": self.device_id,
             "name": self.name,
             "device_type": self.device_type.value,
-            "protocol": self.protocol,
+            "protocol": self.protocol.value,
             "status": self.device_status.value,
             "last_response": self.last_response,
             "created_at": self.created_at,
@@ -69,6 +75,7 @@ class Device:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]):
+        """Преобразовать данные сообщения в девайс."""
         return cls(
             device_id=data.get("device_id", str(uuid.uuid4())),
             name=data.get("name", ""),

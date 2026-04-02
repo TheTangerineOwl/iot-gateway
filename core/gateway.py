@@ -1,3 +1,4 @@
+"""Основной модуль шлюза."""
 import asyncio
 import logging
 import signal
@@ -17,25 +18,30 @@ logger = logging.getLogger(__name__)
 
 
 class Gateway:
-    def __init__(self) -> None:
-        self.adapters: dict[str, ProtocolAdapter] = {}
-        self.running = False
+    """Основной модуль работы шлюза."""
 
-        self.bus = MessageBus(
+    def __init__(self) -> None:
+        """Основной модуль работы шлюза."""
+        self._adapters: dict[str, ProtocolAdapter] = {}
+        self._running = False
+
+        self._bus = MessageBus(
             max_queue=env.int('MESQ_MAX_LEN', default=10000)
         )
 
-        self.registry = DeviceRegistry(
+        self._registry = DeviceRegistry(
             max_devices=env.int('DEVICES_MAX', default=1000),
             stale_timeout=env.float('DEVICES_TIMEOUT_STALE', default=30.0 * 4)
         )
-        self.pipeline = self.build_pipeline()
+        self._pipeline = self._build_pipeline()
 
     @property
     def is_running(self) -> bool:
-        return self.running
+        """Работает ли шлюз."""
+        return self._running
 
-    def build_pipeline(self) -> Pipeline:
+    def _build_pipeline(self) -> Pipeline:
+        """Построить конвейер обработки сообщений."""
         pipeline = Pipeline()
 
         # тут будет добавление этапов конвейера
@@ -43,54 +49,58 @@ class Gateway:
 
         return pipeline
 
-    async def handle_telemetry(self, message: Message) -> None:
-        result = await self.pipeline.execute(message)
+    async def _handle_telemetry(self, message: Message) -> None:
+        """Обработать сообщения телеметрии."""
+        result = await self._pipeline.execute(message)
         if result:
-            await self.registry.heartbeat(result.device_id)
+            await self._registry.heartbeat(result.device_id)
             # Дальше — в хранилище / облако ( когда будет)
             # result.processed = True
             # await self.bus.publish("processed.telemetry", result)
 
-    async def handle_device_message(self, message: Message) -> None:
+    async def _handle_device_message(self, message: Message) -> None:
+        """Обработать технические сообщения."""
         if message.message_type == MessageType.REGISTRATION:
             device = Device.from_dict(message.payload)
             device.protocol = message.protocol
-            await self.registry.register(device)
+            await self._registry.register(device)
 
         elif message.message_type == MessageType.HEARTBEAT:
-            await self.registry.heartbeat(message.device_id)
+            await self._registry.heartbeat(message.device_id)
 
         elif message.message_type == MessageType.STATUS:
             status = DeviceStatus(message.payload.get("status", "online"))
-            await self.registry.update_status(message.device_id, status)
+            await self._registry.update_status(message.device_id, status)
 
     def register_adapter(self, adapter: ProtocolAdapter) -> None:
+        """Зарегистрировать адаптер протокола."""
         name = adapter.protocol_name
-        if name in self.adapters:
+        if name in self._adapters:
             raise ValueError(f"Adapter '{name}' already registered")
 
         adapter.set_gateway_context(
-            message_bus=self.bus,
-            registry=self.registry,
+            message_bus=self._bus,
+            registry=self._registry,
         )
-        self.adapters[name] = adapter
+        self._adapters[name] = adapter
         logger.debug("Protocol adapter registered: %s", name)
 
-    async def start(self) -> None:
+    async def _start(self) -> None:
+        """Запуск шлюза."""
         logger.info('Starting gateway')
 
-        await self.bus.start()
+        await self._bus.start()
 
-        self.bus.subscribe("device.*", self.handle_device_message)
-        self.bus.subscribe("telemetry.*", self.handle_telemetry)
+        self._bus.subscribe("device.*", self._handle_device_message)
+        self._bus.subscribe("telemetry.*", self._handle_telemetry)
 
-        await self.pipeline.setup()
+        await self._pipeline.setup()
 
-        await self.registry.start_monitor(
+        await self._registry.start_monitor(
             check_interval=env.float('DEVICES_CHECK_INTERVAL', default=30.0)
         )
 
-        for name, adapter in self.adapters.items():
+        for name, adapter in self._adapters.items():
             try:
                 await adapter.start()
                 logger.debug("Adapter '%s' started", name)
@@ -102,17 +112,18 @@ class Gateway:
                     exc_info=True
                 )
 
-        self.running = True
+        self._running = True
         logger.info(
             "Gateway started. Adapters: %s",
-            list(self.adapters.keys())
+            list(self._adapters.keys())
         )
 
-    async def stop(self) -> None:
+    async def _stop(self) -> None:
+        """Остановка шлюза."""
         logger.info("Stoping gateway")
         self._running = False
 
-        for name, adapter in reversed(list(self.adapters.items())):
+        for name, adapter in reversed(list(self._adapters.items())):
             try:
                 await adapter.stop()
                 logger.debug("Adapter '%s' stopped", name)
@@ -122,14 +133,15 @@ class Gateway:
                     name, exc, exc_info=True
                 )
 
-        await self.registry.stop_monitor()
-        await self.pipeline.teardown()
-        await self.bus.stop()
+        await self._registry.stop_monitor()
+        await self._pipeline.teardown()
+        await self._bus.stop()
 
         logger.info("Gateway stopped")
 
     async def run_forever(self) -> None:
-        await self.start()
+        """Основной цикл работы шлюза с остановкой по сигналу."""
+        await self._start()
 
         stop_event = asyncio.Event()
 
@@ -149,23 +161,25 @@ class Gateway:
         except KeyboardInterrupt:
             pass
         finally:
-            await self.stop()
+            await self._stop()
 
+    @property
     def status(self) -> dict[str, Any]:
+        """Статус работы шлюза."""
         return {
             "gateway": {
-                # "id":
-                # "name":
+                "id": env.int('GATEWAY_ID', default=1),
+                "name": env.str('GATEWAY_NAME', default='IoT Gateway'),
                 "running": self._running,
             },
             "devices": {
-                "total": self.registry.count,
-                "online": self.registry.online_count,
+                "total": self._registry.count,
+                "online": self._registry.online_count,
             },
-            "message_bus": self.bus.stats,
-            "pipeline": self.pipeline.stats,
+            "message_bus": self._bus.stats,
+            "pipeline": self._pipeline.stats,
             "adapters": {
                 name: {"running": adapter.is_running}
-                for name, adapter in self.adapters.items()
+                for name, adapter in self._adapters.items()
             },
         }
