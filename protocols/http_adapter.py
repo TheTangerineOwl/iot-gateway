@@ -7,21 +7,35 @@ from aiohttp import web
 from http import HTTPStatus
 import json
 import logging
+from typenv import Env
 from typing import Any
 
 from models.message import Message, MessageType
 from protocols.adapter import ProtocolAdapter
 
 
+env = Env(upper=True)
 logger = logging.getLogger(__name__)
 
 
 class HTTPAdapter(ProtocolAdapter):
     def __init__(self) -> None:
         super().__init__()
-        self.host = "0.0.0.0"
-        self.port = 8081
-        self.webhook = "/api/v1/ingest"
+        self.host = env.str('HTTP_HOST', default='0.0.0.0')
+        self.port = env.int('HTTP_PORT', default=8081)
+        self.root_url = env.str('HTTP_URL_ROOT', default='/api/v1')
+        self.wh_telemetry = self.root_url + env.str(
+            'HTTP_URL_TELEMETRY',
+            default='/ingest'
+        )
+        self.url_register = self.root_url + env.str(
+            'HTTP_URL_REGISTER',
+            default='/devices/register'
+        )
+        self.url_health = self.root_url + env.str(
+            'HTTP_URL_HEALTH',
+            default='/health'
+        )
 
     @property
     def protocol_name(self) -> str:
@@ -30,15 +44,15 @@ class HTTPAdapter(ProtocolAdapter):
     async def start(self) -> None:
         self.app = web.Application()
         self.app.router.add_post(
-            self.webhook,
+            self.wh_telemetry,
             self.handle_ingest
         )
         self.app.router.add_post(
-            "/api/v1/devices/register",
+            self.url_register,
             self.handle_register
         )
         self.app.router.add_get(
-            "/api/v1/health",
+            self.url_health,
             self.handle_health
         )
 
@@ -82,7 +96,7 @@ class HTTPAdapter(ProtocolAdapter):
             message_type=MessageType.TELEMETRY,
             device_id=device_id,
             protocol="http",
-            message_topic=self.webhook,
+            message_topic=self.wh_telemetry,
             payload=body.get("data", body),
         )
 

@@ -1,8 +1,8 @@
-from dotenv import load_dotenv
-from os import getenv
+from typenv import Env
 import logging
 
 
+env = Env(upper=True)
 logger = logging.getLogger(__name__)
 SEV_DICT = {
     'DEBUG': logging.DEBUG,
@@ -15,10 +15,10 @@ LOG_DEFAULT = logging.INFO
 
 
 def get_log_severity():
-    debug = getenv('DEBUG', 'False') == 'True'
+    debug = env.bool('DEBUG', default=False)
     if debug:
         return logging.DEBUG
-    level = str(getenv('LOG_SEVERITY', LOG_DEFAULT)).upper()
+    level = str(env.str('LOG_SEVERITY', default=LOG_DEFAULT)).upper()
     if level.isalpha():
         level_num = SEV_DICT.get(level, LOG_DEFAULT)
         return level_num
@@ -29,7 +29,7 @@ def get_log_severity():
 
 def load_env(env_path: str):
     try:
-        loaded = load_dotenv(env_path)
+        loaded = env.read_env(env_path)
         logger.debug('Loading .env from %s', env_path)
         if not loaded:
             logger.info(

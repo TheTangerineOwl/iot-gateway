@@ -1,9 +1,8 @@
 import asyncio
 import logging
-from os import getenv
 import signal
 from typing import Any
-
+from typenv import Env
 from core.registry import DeviceRegistry
 from core.message_bus import MessageBus
 from core.pipeline.pipeline import Pipeline
@@ -13,6 +12,7 @@ from models.message import Message, MessageType
 from protocols.adapter import ProtocolAdapter
 
 
+env = Env(upper=True)
 logger = logging.getLogger(__name__)
 
 
@@ -21,11 +21,13 @@ class Gateway:
         self.adapters: dict[str, ProtocolAdapter] = {}
         self.running = False
 
-        self.bus = MessageBus()
+        self.bus = MessageBus(
+            max_queue=env.int('MESQ_MAX_LEN', default=10000)
+        )
 
         self.registry = DeviceRegistry(
-            max_devices=int(getenv('DEVICES_MAX', 1000)),
-            stale_timeout=int(getenv('DEVICES_TIMEOUT_STALE', 30 * 4)),
+            max_devices=env.int('DEVICES_MAX', default=1000),
+            stale_timeout=env.float('DEVICES_TIMEOUT_STALE', default=30.0 * 4)
         )
         self.pipeline = self.build_pipeline()
 
@@ -85,7 +87,7 @@ class Gateway:
         await self.pipeline.setup()
 
         await self.registry.start_monitor(
-            check_interval=int(getenv('DEVICES_CHECK_INTERVAL', 30.0))
+            check_interval=env.float('DEVICES_CHECK_INTERVAL', default=30.0)
         )
 
         for name, adapter in self.adapters.items():

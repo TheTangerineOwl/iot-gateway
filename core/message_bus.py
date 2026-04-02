@@ -3,9 +3,11 @@ from fnmatch import fnmatch
 from dataclasses import dataclass
 import logging
 from models.message import Message
+from typenv import Env
 from typing import Any, Callable, Coroutine
 
 
+env = Env(upper=True)
 logger = logging.getLogger(__name__)
 
 
@@ -94,7 +96,8 @@ class MessageBus:
         while self.running:
             try:
                 type, message = await asyncio.wait_for(
-                    self.queue.get(), timeout=1.0
+                    self.queue.get(),
+                    timeout=env.float('MESQ_TIMEOUT', default=1.0)
                 )
             except asyncio.TimeoutError:
                 continue
