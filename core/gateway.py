@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from os import getenv
 import signal
 from typing import Any
 
@@ -21,9 +22,10 @@ class Gateway:
         self.running = False
 
         self.bus = MessageBus()
+
         self.registry = DeviceRegistry(
-            max_devices=1000,
-            stale_timeout=30 * 4,
+            max_devices=int(getenv('DEVICES_MAX', 1000)),
+            stale_timeout=int(getenv('DEVICES_TIMEOUT_STALE', 30 * 4)),
         )
         self.pipeline = self.build_pipeline()
 
@@ -44,6 +46,7 @@ class Gateway:
         if result:
             await self.registry.heartbeat(result.device_id)
             # Дальше — в хранилище / облако ( когда будет)
+            # result.processed = True
             # await self.bus.publish("processed.telemetry", result)
 
     async def handle_device_message(self, message: Message) -> None:
@@ -81,7 +84,9 @@ class Gateway:
 
         await self.pipeline.setup()
 
-        await self.registry.start_monitor(check_interval=30)
+        await self.registry.start_monitor(
+            check_interval=int(getenv('DEVICES_CHECK_INTERVAL', 30.0))
+        )
 
         for name, adapter in self.adapters.items():
             try:

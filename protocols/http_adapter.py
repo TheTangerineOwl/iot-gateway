@@ -4,6 +4,7 @@
     GET /api/v1/health чек
 """
 from aiohttp import web
+from http import HTTPStatus
 import json
 import logging
 from typing import Any
@@ -65,13 +66,16 @@ class HTTPAdapter(ProtocolAdapter):
         try:
             body = await request.json()
         except json.JSONDecodeError:
-            return web.json_response({"error": "Invalid JSON"}, status=400)
+            return web.json_response(
+                {"error": "Invalid JSON"},
+                status=HTTPStatus.BAD_REQUEST
+            )
 
         device_id = body.get("device_id")
         if not device_id:
             return web.json_response(
                 {"error": "device_id required"},
-                status=400
+                status=HTTPStatus.BAD_REQUEST
             )
 
         message = Message(
@@ -89,13 +93,18 @@ class HTTPAdapter(ProtocolAdapter):
         return web.json_response({
             "status": "accepted",
             "message_id": message.message_id,
-        }, status=202)
+            },
+            status=HTTPStatus.ACCEPTED
+        )
 
     async def handle_register(self, request) -> Any:
         try:
             body = await request.json()
         except json.JSONDecodeError:
-            return web.json_response({"error": "Invalid JSON"}, status=400)
+            return web.json_response(
+                {"error": "Invalid JSON"},
+                status=HTTPStatus.BAD_REQUEST
+            )
 
         message = Message(
             message_type=MessageType.REGISTRATION,
@@ -112,7 +121,10 @@ class HTTPAdapter(ProtocolAdapter):
 
         # logger.debug('HTTP adapter got register: %s', message.to_dict())
 
-        return web.json_response({"status": "registered"}, status=201)
+        return web.json_response(
+            {"status": "registered"},
+            status=HTTPStatus.CREATED
+        )
 
     async def handle_health(self, request) -> Any:
         health = await self.health_check()
