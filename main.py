@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 import logging
-from sys import exit, stdout, stderr
+from sys import exit
 from core.gateway import Gateway
 from protocols.http_adapter import HTTPAdapter
 
@@ -20,8 +20,10 @@ async def main():
         encoding='utf-8',
         format="%(asctime)s │ %(levelname)-7s │ %(name)-30s │ %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        level=logging.INFO
+        level=logging.DEBUG
     )
+    logging.getLogger('aiohttp').setLevel(logging.WARNING)
+    logging.getLogger('asyncio').setLevel(logging.WARNING)
 
     register_adapters(gateway)
     await gateway.run_forever()

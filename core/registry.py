@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from models.device import Device, DeviceStatus, DeviceType
+from models.device import Device, DeviceStatus
 
 
 logger = logging.getLogger(__name__)

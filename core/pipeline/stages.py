@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import Any
 from models.message import Message
 
 

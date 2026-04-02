@@ -84,6 +84,8 @@ class HTTPAdapter(ProtocolAdapter):
 
         await self.publish_message(f"telemetry.{device_id}", message)
 
+        # logger.debug('HTTP adapter got telemetry: %s', message.to_dict())
+
         return web.json_response({
             "status": "accepted",
             "message_id": message.message_id,
@@ -107,8 +109,20 @@ class HTTPAdapter(ProtocolAdapter):
             f"device.register.{message.device_id}",
             message
         )
+
+        # logger.debug('HTTP adapter got register: %s', message.to_dict())
+
         return web.json_response({"status": "registered"}, status=201)
 
     async def handle_health(self, request) -> Any:
         health = await self.health_check()
+
+        # json = await request.json()
+        # if json:
+        #     id = str(json.get('device_id', ''))
+        #     if len(id) > 0:
+        #         logger.debug('Health check from device %s', id)
+
+        # logger.debug('HTTP got health check')
+
         return web.json_response(health)

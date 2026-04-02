@@ -37,6 +37,7 @@ class Message:
         return {
             'message_id': self.message_id,
             'message_type': self.message_type.value,
+            'message_topic': self.message_topic,
             'device_id': self.device_id,
             'protocol': self.protocol,
             'payload': self.payload,
