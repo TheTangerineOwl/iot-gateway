@@ -10,6 +10,8 @@ from core.pipeline.pipeline import Pipeline
 from core.pipeline.stages import (ValidationStage)
 from models.device import DeviceStatus, Device
 from models.message import Message, MessageType
+from models.telemetry import TelemetryRecord
+from storage.sqlite import SQLiteStorage
 from protocols.adapter import ProtocolAdapter
 
 
@@ -34,6 +36,9 @@ class Gateway:
             stale_timeout=env.float('DEVICES_TIMEOUT_STALE', default=30.0 * 4)
         )
         self._pipeline = self._build_pipeline()
+        self._storage = SQLiteStorage(
+            db_path=env.str('STORAGE_DB_PATH', default='data/telemetry.db')
+        )
 
     @property
     def is_running(self) -> bool:
@@ -57,6 +62,16 @@ class Gateway:
             # Дальше — в хранилище / облако ( когда будет)
             # result.processed = True
             # await self.bus.publish("processed.telemetry", result)
+            # переделать в подписчика потом
+            result.processed = True
+            try:
+                record = TelemetryRecord.from_message(result)
+                await self._storage.save(record)
+            except Exception as exc:
+                logger.error(
+                    "Storage error for message %s: %s",
+                    result.message_id, exc, exc_info=True
+                )
 
     async def _handle_device_message(self, message: Message) -> None:
         """Обработать технические сообщения."""
@@ -88,7 +103,7 @@ class Gateway:
     async def _start(self) -> None:
         """Запуск шлюза."""
         logger.info('Starting gateway')
-
+        await self._storage.setup()
         await self._bus.start()
 
         self._bus.subscribe("device.*", self._handle_device_message)
@@ -136,6 +151,7 @@ class Gateway:
         await self._registry.stop_monitor()
         await self._pipeline.teardown()
         await self._bus.stop()
+        await self._storage.teardown()
 
         logger.info("Gateway stopped")
 

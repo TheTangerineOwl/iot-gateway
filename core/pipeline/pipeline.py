@@ -29,6 +29,7 @@ class Pipeline:
 
     @property
     def stages(self) -> list[str]:
+        """Имена этапов конвейера."""
         return [s.name for s in self._stages]
 
     def add_stage(self, stage: PipelineStage) -> None:

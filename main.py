@@ -40,6 +40,7 @@ async def main():
     )
     logging.getLogger('aiohttp').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
+    logging.getLogger('aiosqlite').setLevel(logging.WARNING)
     register_adapters(gateway)
     await gateway.run_forever()
 

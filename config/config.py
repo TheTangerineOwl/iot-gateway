@@ -19,7 +19,8 @@ def get_log_severity() -> str | int:
     """Получить уровень логирования из окружения."""
     debug = env.bool('DEBUG', default=False)
     if debug:
-        return logging.DEBUG
+        # return logging.DEBUG
+        return 0
     level = str(env.str('LOG_SEVERITY', default=str(LOG_DEFAULT))).upper()
     if level.isalpha():
         level_num = SEV_DICT.get(level, LOG_DEFAULT)
