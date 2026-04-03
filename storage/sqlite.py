@@ -49,7 +49,7 @@ class SQLiteStorage(StorageBase):
             ),
         )
         await self._conn.commit()
-        logger.debug("Saved telemetry from %s", record.device_id)
+        logger.log(5, "Saved telemetry from %s", record.device_id)
 
     async def get_by_device(
         self,

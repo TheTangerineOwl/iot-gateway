@@ -10,8 +10,8 @@ from core.pipeline.pipeline import Pipeline
 from core.pipeline.stages import (ValidationStage)
 from models.device import DeviceStatus, Device
 from models.message import Message, MessageType
-from models.telemetry import TelemetryRecord
 from storage.sqlite import SQLiteStorage
+from storage.subscriber import StorageSubscriber
 from protocols.adapter import ProtocolAdapter
 
 
@@ -39,6 +39,7 @@ class Gateway:
         self._storage = SQLiteStorage(
             db_path=env.str('STORAGE_DB_PATH', default='data/telemetry.db')
         )
+        self._storage_subscriber = StorageSubscriber(self._storage)
 
     @property
     def is_running(self) -> bool:
@@ -59,19 +60,11 @@ class Gateway:
         result = await self._pipeline.execute(message)
         if result:
             await self._registry.heartbeat(result.device_id)
-            # Дальше — в хранилище / облако ( когда будет)
-            # result.processed = True
-            # await self.bus.publish("processed.telemetry", result)
-            # переделать в подписчика потом
             result.processed = True
-            try:
-                record = TelemetryRecord.from_message(result)
-                await self._storage.save(record)
-            except Exception as exc:
-                logger.error(
-                    "Storage error for message %s: %s",
-                    result.message_id, exc, exc_info=True
-                )
+            await self._bus.publish(
+                f'processed.telemetry.{result.device_id}',
+                result
+            )
 
     async def _handle_device_message(self, message: Message) -> None:
         """Обработать технические сообщения."""
@@ -108,6 +101,10 @@ class Gateway:
 
         self._bus.subscribe("device.*", self._handle_device_message)
         self._bus.subscribe("telemetry.*", self._handle_telemetry)
+        self._bus.subscribe(
+            "processed.telemetry.*",
+            self._storage_subscriber.handle
+        )
 
         await self._pipeline.setup()
 
