@@ -1,5 +1,6 @@
 """Этапы обработки сообщения на конвейере."""
 import logging
+from math import isnan, isinf
 from core.registry import DeviceRegistry
 from models.message import Message
 from models.device import DeviceStatus
@@ -55,4 +56,35 @@ class AuthorizationStage(PipelineStage):
                 "Message from ERROR device ignored: %s", message.device_id
             )
             return None
+        return message
+
+
+class CleanupStage(PipelineStage):
+    """Этап очистки некорректных значений."""
+
+    @property
+    def name(self):
+        """Имя этапа."""
+        return 'cleanup'
+
+    async def process(self, message: Message) -> Message | None:
+        """Удаление некорректных значений."""
+        clean = {}
+        for key, value in message.payload.items():
+            if isinstance(value, float) and (isnan(value) or isinf(value)):
+                logger.debug(
+                    "Dropping invalid float '%s'=%s from %s",
+                    key, value, message.device_id
+                )
+                continue
+            clean[key] = value
+
+        if not clean:
+            logger.info(
+                "Message %s dropped: payload empty after sanitization",
+                message.message_id
+            )
+            return None
+
+        message.payload = clean
         return message

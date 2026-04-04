@@ -8,7 +8,7 @@ from core.registry import DeviceRegistry
 from core.message_bus import MessageBus
 from core.pipeline.pipeline import Pipeline
 from core.pipeline.stages import (
-    ValidationStage, AuthorizationStage
+    ValidationStage, AuthorizationStage, CleanupStage
 )
 from models.device import DeviceStatus, Device
 from models.message import Message, MessageType
@@ -55,6 +55,7 @@ class Gateway:
         # тут будет добавление этапов конвейера
         pipeline.add_stage(ValidationStage())
         pipeline.add_stage(AuthorizationStage(self._registry))
+        pipeline.add_stage(CleanupStage())
 
         return pipeline
 
