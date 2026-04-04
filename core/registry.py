@@ -24,6 +24,10 @@ class DeviceRegistry:
         self._on_unregister_callbacks: list = []
         self._on_status_change_callbacks: list = []
 
+    def get(self, device_id: str) -> Device | None:
+        """Получить зарегистрированный девайс."""
+        return self._devices.get(device_id, None)
+
     async def register(self, device: Device):
         """Зарегистрировать девайс."""
         async with self._lock:

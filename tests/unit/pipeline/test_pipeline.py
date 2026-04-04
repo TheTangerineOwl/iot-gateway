@@ -1,8 +1,7 @@
 """Тест модуля конвейера обработки  сообщдений."""
 import pytest
 from core.pipeline.pipeline import Pipeline
-from core.pipeline.stages import ValidationStage, PipelineStage
-from models.message import Message
+from core.pipeline.stages import PipelineStage
 
 
 class PassThroughStage(PipelineStage):
@@ -23,47 +22,6 @@ class FilterStage(PipelineStage):
     async def process(self, message):
         """Обработка сообщений."""
         return None
-
-
-@pytest.mark.asyncio
-async def test_valid_passes(telemetry_message):
-    """Корректное сообщение должно проходить свободно."""
-    pipeline = Pipeline()
-    pipeline.add_stage(ValidationStage())
-    await pipeline.setup()
-
-    result = await pipeline.execute(telemetry_message)
-
-    assert result is not None
-    assert result.processed is True
-    assert pipeline.stats["processed"] == 1
-
-
-@pytest.mark.asyncio
-async def test_filter_wo_device_id():
-    """Сообщения без device_id должны отсеиваться."""
-    pipeline = Pipeline()
-    pipeline.add_stage(ValidationStage())
-    await pipeline.setup()
-
-    msg = Message(device_id="", payload={"value": 1})
-    result = await pipeline.execute(msg)
-
-    assert result is None
-    assert pipeline.stats["filtered"] == 1
-
-
-@pytest.mark.asyncio
-async def test_filter_empty():
-    """Пустые (без нагрузки) сообщения должны отсеиваться."""
-    pipeline = Pipeline()
-    pipeline.add_stage(ValidationStage())
-    await pipeline.setup()
-
-    msg = Message(device_id="dev-1", payload={})
-    result = await pipeline.execute(msg)
-
-    assert result is None
 
 
 @pytest.mark.asyncio

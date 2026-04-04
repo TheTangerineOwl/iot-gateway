@@ -8,24 +8,6 @@ from models.device import Device, DeviceStatus, DeviceType, ProtocolType
 
 
 @pytest.fixture
-def registry():
-    """Реестр с маленьким лимитом устройств и долгим stale-таймаутом."""
-    return DeviceRegistry(max_devices=5, stale_timeout=120.0)
-
-
-@pytest.fixture
-def device():
-    """Устройство со всеми явными полями, чтобы тесты не зависели от uuid4."""
-    return Device(
-        device_id="dev-001",
-        name="Thermometer",
-        device_type=DeviceType.SENSOR,
-        device_status=DeviceStatus.OFFLINE,
-        protocol=ProtocolType.HTTP,
-    )
-
-
-@pytest.fixture
 def online_device():
     """Устройство, уже находящееся в статусе ONLINE."""
     return Device(

@@ -1,33 +1,12 @@
 """Этапы обработки сообщения на конвейере."""
-from abc import ABC, abstractmethod
 import logging
+from core.registry import DeviceRegistry
 from models.message import Message
+from models.device import DeviceStatus
+from .base import PipelineStage
 
 
 logger = logging.getLogger(__name__)
-
-
-class PipelineStage(ABC):
-    """Абстрактный класс для этапа конвейера."""
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Абстрактное свойство для вывода имени этапа."""
-        pass
-
-    @abstractmethod
-    async def process(self, message: Message) -> Message | None:
-        """Абстрактный метод для обработки сообщения на этапе."""
-        pass
-
-    async def setup(self) -> None:
-        """Инициализация этапа (вызывается при старте pipeline)."""
-        pass
-
-    async def teardown(self) -> None:
-        """Деинициализация этапа."""
-        pass
 
 
 class ValidationStage(PipelineStage):
@@ -46,6 +25,34 @@ class ValidationStage(PipelineStage):
         if not message.payload:
             logger.info(
                 "Message discarded: empty payload from %d", message.device_id
+            )
+            return None
+        return message
+
+
+class AuthorizationStage(PipelineStage):
+    """Этап проверки авторизации девайса."""
+
+    @property
+    def name(self) -> str:
+        """Имя этапа."""
+        return "authorization"
+
+    def __init__(self, registry: DeviceRegistry) -> None:
+        """Этап проверки регистрации девайса."""
+        self._registry = registry
+
+    async def process(self, message: Message) -> Message | None:
+        """Проверка авторизации девайса, приславшего сообщение."""
+        device = self._registry.get(message.device_id)
+        if device is None:
+            logger.warning(
+                "Unauthorized device: %s", message.device_id
+            )
+            return None
+        if device.device_status == DeviceStatus.ERROR:
+            logger.warning(
+                "Message from ERROR device ignored: %s", message.device_id
             )
             return None
         return message
