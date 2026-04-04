@@ -44,12 +44,12 @@ async def test_valid_message_reaches_storage(full_flow, telemetry_message):
     """Корректное сообщение проходит весь путь и сохраняется."""
     bus, storage = full_flow
 
-    await bus.publish("telemetry.dev-1", telemetry_message)
+    await bus.publish("telemetry.dev-001", telemetry_message)
     await asyncio.sleep(0.1)
 
     storage.save.assert_awaited_once()
     record = storage.save.call_args[0][0]
-    assert record.device_id == "dev-1"
+    assert record.device_id == "dev-001"
 
 
 @pytest.mark.asyncio
@@ -58,7 +58,7 @@ async def test_invalid_message_not_saved(full_flow):
     bus, storage = full_flow
 
     bad_msg = Message(device_id="", payload={"x": 1})
-    await bus.publish("telemetry.dev-1", bad_msg)
+    await bus.publish("telemetry.dev-001", bad_msg)
     await asyncio.sleep(0.1)
 
     storage.save.assert_not_awaited()
