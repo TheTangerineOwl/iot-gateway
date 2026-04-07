@@ -118,7 +118,7 @@ class Simulator(ABC):
         logger.info(
             "%s (%s) started in '%s' simulator",
             device.device_id,
-            device.device_type.value,
+            device.sensor_type.value,
             self.simulator_name)
         try:
             while not self._stop.is_set():
@@ -135,18 +135,19 @@ class Simulator(ABC):
         total_sent = sum(d.sent for d in self._devices)
         total_ok = sum(d.ok for d in self._devices)
         total_failed = sum(d.failed for d in self._devices)
-        print(f"\nИТОГ ДЛЯ {self.simulator_name}")
-        print(
+        logger.info(f"ИТОГ ДЛЯ {self.simulator_name}")
+        logger.info(
             f"\t{'устройство':<22} {'отправлено':>10} "
             f"{'ок':>6} {'ошибок':>8}"
         )
         for d in self._devices:
-            print(f"\t{d.device_id:<22} {d.sent:>10} {d.ok:>6} {d.failed:>8}")
-        print(
+            logger.info(
+                f"\t{d.device_id:<22} {d.sent:>10} {d.ok:>6} {d.failed:>8}"
+            )
+        logger.info(
             f"\t{'ВСЕГО':<22} {total_sent:>10} "
             f"{total_ok:>6} {total_failed:>8}"
         )
-        print()
 
     async def run(self) -> None:
         """Симулировать генерацию сообщений и взаимодействие со шлюзом."""

@@ -74,6 +74,8 @@ class Gateway:
         """Обработать технические сообщения."""
         if message.message_type == MessageType.REGISTRATION:
             device = Device.from_dict(message.payload)
+            device.device_id = message.device_id
+            device.device_status = DeviceStatus.ONLINE
             device.protocol = message.protocol
             await self._registry.register(device)
 
@@ -81,7 +83,9 @@ class Gateway:
             await self._registry.heartbeat(message.device_id)
 
         elif message.message_type == MessageType.STATUS:
-            status = DeviceStatus(message.payload.get("status", "online"))
+            status = DeviceStatus(
+                message.payload.get("device_status", "online")
+            )
             await self._registry.update_status(message.device_id, status)
 
     def register_adapter(self, adapter: ProtocolAdapter) -> None:

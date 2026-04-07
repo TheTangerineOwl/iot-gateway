@@ -2,7 +2,8 @@
 from dataclasses import dataclass, field
 from time import time
 from typing import Any
-from uuid import uuid4
+# from uuid import uuid4
+from models.device import Device, DeviceType, DeviceStatus, ProtocolType
 from .data_generator import SensorType, DataGenerator
 from .faults import get_faulty
 
@@ -11,11 +12,16 @@ from .faults import get_faulty
 class SimulatedDevice:
     """Симулированный девайс."""
 
-    device_id: str
-    device_type: SensorType
+    device: Device
+    # device_id: str
+    sensor_type: SensorType
     sent: int = field(default=0, init=False)
     ok: int = field(default=0, init=False)
     failed: int = field(default=0, init=False)
+
+    @property
+    def device_id(self) -> str:
+        return self.device.device_id
 
     @classmethod
     def make_devices(cls, n: int) -> list["SimulatedDevice"]:
@@ -24,16 +30,23 @@ class SimulatedDevice:
         devices = []
         for i in range(n):
             sensor_type = types[i % len(types)]
-            device_id = f"{sensor_type.value}-{i + 1:03d}"
+            device_name = f'{sensor_type.value}-{i + 1:03d}'
+            device = Device(
+                name=device_name,
+                device_type=DeviceType.SENSOR,
+                device_status=DeviceStatus.ONLINE,
+                protocol=ProtocolType.HTTP
+            )
             devices.append(SimulatedDevice(
-                device_id=device_id, device_type=sensor_type
+                device=device,
+                sensor_type=sensor_type
             ))
         return devices
 
     def build_message(self, broken: bool = False) -> dict[str, Any]:
         """Построить сообщение с датчика."""
         t = time()
-        payload_gen = DataGenerator.get_generator(self.device_type)
+        payload_gen = DataGenerator.get_generator(self.sensor_type)
         payload = payload_gen(t)
 
         if broken:
@@ -41,17 +54,25 @@ class SimulatedDevice:
 
         return {
             "device_id":  self.device_id,
-            "message_id": str(uuid4()),
-            "timestamp":  t,
+            'name': self.device.name,
+            'device_type': self.device.device_type,
+            'protocol': self.device.protocol,
+            'device_status': self.device.device_status,
+            # "message_id": str(uuid4()),
+            # "timestamp":  t,
             "payload":    payload,
         }
 
     def build_register(self):
         """Построить сообщение для регистрации девайса."""
-        t = time()
+        # t = time()
         return {
-            'device_id': self.device_id,
-            'message_id': str(uuid4()),
-            'timestamp': t,
+            "device_id":  self.device_id,
+            'name': self.device.name,
+            'device_type': self.device.device_type,
+            'protocol': self.device.protocol,
+            'device_status': self.device.device_status,
+            # "message_id": str(uuid4()),
+            # "timestamp":  t,
             'payload': {}
         }

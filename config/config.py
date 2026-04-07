@@ -34,7 +34,7 @@ def load_env(env_path: str = '.env') -> None:
     """Загрузить переменные окружения из указанного файла."""
     try:
         loaded = env.read_env(env_path)
-        logger.debug('Loading .env from %s', env_path)
+        logger.info('Loading .env from %s', env_path)
         if not loaded:
             logger.info(
                 'Environment variables from %s not loaded, using defaults',

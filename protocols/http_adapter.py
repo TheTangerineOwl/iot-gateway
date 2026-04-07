@@ -105,7 +105,7 @@ class HTTPAdapter(ProtocolAdapter):
             device_id=device_id,
             protocol="http",
             message_topic=self._wh_telemetry,
-            payload=body.get("data", body),
+            payload=body.get("payload", body),
         )
 
         await self._publish_message(f"telemetry.{device_id}", message)
@@ -133,7 +133,7 @@ class HTTPAdapter(ProtocolAdapter):
             message_type=MessageType.REGISTRATION,
             device_id=body.get("device_id", ""),
             protocol="http",
-            message_topic="/api/v1/devices/register",
+            message_topic=self._url_register,
             payload=body,
         )
         message.message_topic = f"device.register.{message.device_id}"

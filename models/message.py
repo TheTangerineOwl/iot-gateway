@@ -33,8 +33,7 @@ class Message:
     protocol: str = ''
     payload: dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time)
-    processed: bool = False
-    value: Any = ''
+    processed: bool = field(default=False, init=False)
 
     def to_dict(self) -> dict[str, Any]:
         """Получить данные сообщения."""
@@ -46,6 +45,17 @@ class Message:
             'protocol': self.protocol,
             'payload': self.payload,
             'timestamp': self.timestamp,
-            'processed': self.processed,
-            'value': self.value
+            'processed': self.processed
         }
+
+    @classmethod
+    def from_dict(cls, json: dict[str, Any]) -> "Message":
+        return cls(
+            message_id=json.get('message_id', str(uuid4())),
+            message_type=json.get('message_type', MessageType.TELEMETRY),
+            message_topic=json.get('message_topic', ''),
+            device_id=json.get('device_id', ''),
+            protocol=json.get('protocol', ''),
+            payload=json.get('payload', dict()),
+            timestamp=json.get('timestamp', time())
+        )

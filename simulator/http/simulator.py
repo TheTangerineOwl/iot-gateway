@@ -63,16 +63,18 @@ class HttpSimulator(Simulator):
             ):
                 device.ok += 1
                 logger.info(
-                    "%-20s %s payload=%s",
+                    "%-36s (%s) %s payload=%s",
                     device.device_id,
+                    device.device.name,
                     tag,
                     msg["payload"],
                 )
             else:
                 device.failed += 1
                 logger.warning(
-                    "%-20s HTTP %d %s body=%s",
+                    "%-36s (%s) HTTP %d %s body=%s",
                     device.device_id,
+                    device.device.name,
                     status,
                     tag,
                     body,
@@ -80,13 +82,25 @@ class HttpSimulator(Simulator):
         except aiohttp.ClientConnectorError as exc:
             device.failed += 1
             logger.exception(
-                "%-20s connection refused: %s", device.device_id, exc
+                "%-36s (%s) connection refused: %s",
+                device.device_id,
+                device.device.name,
+                exc
             )
         except asyncio.TimeoutError as exc:
             device.failed += 1
-            logger.exception("%-20s timeout (%s)", device.device_id, exc)
+            logger.exception(
+                "%-36s (%s) timeout (%s)",
+                device.device_id,
+                device.device.name,
+                exc
+            )
         except Exception as exc:
             device.failed += 1
             logger.exception(
-                "%-20s  %s: %s", device.device_id, type(exc).__name__, exc
+                "%-36s (%s)  %s: %s",
+                device.device_id,
+                device.device.name,
+                type(exc).__name__,
+                exc
             )

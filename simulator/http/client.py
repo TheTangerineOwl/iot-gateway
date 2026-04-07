@@ -14,10 +14,15 @@ logger = logging.getLogger(__name__)
 class HTTPGatewayClient(GatewayClient):
     """Менеджер контекста для http-симулятора."""
 
-    def __init__(self, timeout: float = 5.0) -> None:
+    def __init__(
+            self,
+            host: str = '127.0.0.1',
+            port: int = 8081,
+            timeout: float = 5.0
+    ) -> None:
         """Создать сессию http-клиента для симулятора."""
-        self._host = env.str('SIM_HTTP_HOST', default='127.0.0.1')
-        self._port = env.int('SIM_HTTP_PORT', default=8081)
+        self._host = host
+        self._port = port
         self._root_url = env.str('HTTP_URL_ROOT', default='/api/v1') + '/'
         self._wh_telemetry = env.str(
             'HTTP_URL_TELEMETRY',
@@ -41,7 +46,7 @@ class HTTPGatewayClient(GatewayClient):
             base_url=base,
             timeout=self._timeout
         )
-        logger.info(f'Started session with base_url {base}')
+        logger.info(f'Started session with url {base}')
         return self
 
     async def __aexit__(self, *_: object) -> None:
