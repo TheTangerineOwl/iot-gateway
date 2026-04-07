@@ -50,6 +50,7 @@ class Message:
 
     @classmethod
     def from_dict(cls, json: dict[str, Any]) -> "Message":
+        """Получить сообщение из словаря."""
         return cls(
             message_id=json.get('message_id', str(uuid4())),
             message_type=json.get('message_type', MessageType.TELEMETRY),

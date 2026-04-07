@@ -21,6 +21,7 @@ class SimulatedDevice:
 
     @property
     def device_id(self) -> str:
+        """Идентификатор девайса."""
         return self.device.device_id
 
     @classmethod
