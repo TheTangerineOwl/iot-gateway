@@ -39,7 +39,7 @@ class Gateway:
         )
         self._pipeline = self._build_pipeline()
         self._storage = SQLiteStorage(
-            db_path=env.str('STORAGE_DB_PATH', default='data/telemetry.db')
+            db_path=env.str('STORAGE_DB_CONNSTR', default='data/telemetry.db')
         )
         self._storage_subscriber = StorageSubscriber(self._storage)
 

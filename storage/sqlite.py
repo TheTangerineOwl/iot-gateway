@@ -3,7 +3,9 @@ import aiosqlite
 import json
 import logging
 import os
-from storage.base import CREATE_TABLE, INSERT_SQL, StorageBase
+from storage.base import (
+    CREATE_TABLE, INSERT_SQL, SELECT_BY_DEVICE, StorageBase
+)
 from models.telemetry import TelemetryRecord
 
 
@@ -57,13 +59,7 @@ class SQLiteStorage(StorageBase):
         limit: int = 100,
     ) -> list[TelemetryRecord]:
         """Получить последние N записей устройства."""
-        sql = """
-            SELECT message_id, device_id, protocol, payload, timestamp
-            FROM telemetry
-            WHERE device_id = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        """
+        sql = SELECT_BY_DEVICE
         if self._conn is None:
             raise aiosqlite.DatabaseError('Connection not established')
         async with self._conn.execute(sql, (device_id, limit)) as cursor:

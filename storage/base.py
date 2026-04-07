@@ -24,6 +24,14 @@ INSERT INTO telemetry
 VALUES (?, ?, ?, ?, ?);
 """
 
+SELECT_BY_DEVICE = """
+    SELECT message_id, device_id, protocol, payload, timestamp
+    FROM telemetry
+    WHERE device_id = ?
+    ORDER BY timestamp DESC
+    LIMIT ?;
+"""
+
 
 class StorageBase(ABC):
     """Базовый класс хранилища телеметрии."""

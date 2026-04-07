@@ -12,9 +12,12 @@ multidict==6.7.1
 packaging==26.0
 pluggy==1.6.0
 propcache==0.4.1
+psycopg==3.3.3
+psycopg-binary==3.3.3
 Pygments==2.20.0
 pytest==9.0.2
 pytest-asyncio==1.3.0
 python-dotenv==1.2.2
 typenv==0.2.0
+tzdata==2026.1
 yarl==1.23.0
