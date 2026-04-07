@@ -30,14 +30,15 @@ def get_log_severity() -> str | int:
     return LOG_DEFAULT
 
 
-def load_env(env_path: str) -> None:
+def load_env(env_path: str = '.env') -> None:
     """Загрузить переменные окружения из указанного файла."""
     try:
         loaded = env.read_env(env_path)
         logger.debug('Loading .env from %s', env_path)
         if not loaded:
             logger.info(
-                'Environment variables from  not loaded, using defaults'
+                'Environment variables from %s not loaded, using defaults',
+                env_path
             )
     except Exception as ex:
-        logger.exception('Couldn\'t load .env: %s', ex)
+        logger.exception('Couldn\'t load env from %s: %s', env_path, ex)
