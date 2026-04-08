@@ -136,8 +136,8 @@ class PostgresStorage(StorageBase):
             raise psycopg.DatabaseError('Connection not established')
         async with self._conn.cursor() as cur:
             await cur.execute(sql, (device_id, limit))
-        await self._conn.commit()
-        rows = await cur.fetchall()
+            await self._conn.commit()
+            rows = await cur.fetchall()
 
         return [
             TelemetryRecord(
