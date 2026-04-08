@@ -110,11 +110,11 @@ class SQLiteStorage(StorageBase):
 
         return [
             TelemetryRecord(
-                message_id=row[0],
-                device_id=row[1],
-                protocol=row[2],
-                payload=json.loads(row[3]),
-                timestamp=row[4],
+                message_id=row['message_id'],
+                device_id=row['device_id'],
+                protocol=row['protocol'],
+                payload=json.loads(row['payload']),
+                timestamp=row['timestamp'],
             )
             for row in rows
         ]

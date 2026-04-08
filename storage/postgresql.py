@@ -2,9 +2,11 @@
 from contextlib import contextmanager
 import psycopg
 from psycopg.connection_async import AsyncConnection
-from psycopg.rows import RowFactory
+from psycopg.rows import dict_row
+
 import json
 import logging
+from typing import Any
 from storage.base import StorageBase
 from models.telemetry import TelemetryRecord
 
@@ -57,7 +59,7 @@ SELECT_BY_DEVICE = """
 class PostgresStorage(StorageBase):
     """Хранилище телеметрии на PostgreSQL."""
 
-    _conn: AsyncConnection | None = None
+    _conn: AsyncConnection[dict[str, Any]] | None = None
 
     def __init__(
         self,
@@ -71,7 +73,7 @@ class PostgresStorage(StorageBase):
         """Менеджер контекста для PostgreSQL подключения."""
         self._conn = await AsyncConnection.connect(
             conninfo=self._conn_str,
-            row_factory=RowFactory
+            row_factory=dict_row
         )
         try:
             yield self._conn
@@ -82,11 +84,12 @@ class PostgresStorage(StorageBase):
         """Открыть БД и создать таблицу."""
         try:
             self._conn = await AsyncConnection.connect(
-                conninfo=self._conn_str
+                conninfo=self._conn_str,
+                row_factory=dict_row
             )
             if self._conn is None:
                 raise psycopg.DatabaseError('Connection not established')
-            async with self._conn.cursor(row_factory=RowFactory) as cur:
+            async with self._conn.cursor() as cur:
                 for statement in STATEMENTS:
                     await cur.execute(statement)
             await self._conn.commit()
@@ -108,7 +111,7 @@ class PostgresStorage(StorageBase):
         """Сохранить запись телеметрии."""
         if self._conn is None:
             raise psycopg.DatabaseError('Connection not established')
-        async with self._conn.cursor(row_factory=RowFactory) as cur:
+        async with self._conn.cursor() as cur:
             await cur.execute(
                 INSERT_SQL,
                 (
@@ -131,10 +134,10 @@ class PostgresStorage(StorageBase):
         sql = SELECT_BY_DEVICE
         if self._conn is None:
             raise psycopg.DatabaseError('Connection not established')
-        async with self._conn.cursor(row_factory=RowFactory) as cur:
+        async with self._conn.cursor() as cur:
             await cur.execute(sql, (device_id, limit))
-            await self._conn.commit()
-            rows = await cur.fetchall()
+        await self._conn.commit()
+        rows = await cur.fetchall()
 
         return [
             TelemetryRecord(
