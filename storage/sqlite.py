@@ -3,13 +3,53 @@ import aiosqlite
 import json
 import logging
 import os
-from storage.base import (
-    CREATE_TABLE, INSERT_SQL, SELECT_BY_DEVICE, StorageBase
-)
+from storage.base import StorageBase
 from models.telemetry import TelemetryRecord
 
 
 logger = logging.getLogger(__name__)
+
+
+CREATE_TABLE = """
+CREATE TABLE IF NOT EXISTS telemetry (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id TEXT            NOT NULL,
+    device_id  TEXT            NOT NULL,
+    protocol   TEXT            DEFAULT '',
+    payload    TEXT            NOT NULL,
+    timestamp  REAL            NOT NULL
+);
+"""
+
+CREATE_IDX_DEVICE = """
+CREATE INDEX IF NOT EXISTS idx_device_id
+    ON telemetry (device_id);
+"""
+
+CREATE_IDX_TS = """
+CREATE INDEX IF NOT EXISTS idx_timestamp
+    ON telemetry (timestamp);
+"""
+
+STATEMENTS = [
+    CREATE_TABLE,
+    CREATE_IDX_DEVICE,
+    CREATE_IDX_TS,
+]
+
+INSERT_SQL = """
+INSERT INTO telemetry
+    (message_id, device_id, protocol, payload, timestamp)
+VALUES (?, ?, ?, ?, ?);
+"""
+
+SELECT_BY_DEVICE = """
+    SELECT message_id, device_id, protocol, payload, timestamp
+    FROM telemetry
+    WHERE device_id = ?
+    ORDER BY timestamp DESC
+    LIMIT ?;
+"""
 
 
 class SQLiteStorage(StorageBase):
@@ -24,7 +64,10 @@ class SQLiteStorage(StorageBase):
         """Открыть БД и создать таблицу."""
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         self._conn = await aiosqlite.connect(self._db_path)
-        await self._conn.executescript(CREATE_TABLE)
+        self._conn.row_factory = aiosqlite.Row
+        async with self._conn.cursor() as cur:
+            for statement in STATEMENTS:
+                await cur.execute(statement)
         await self._conn.commit()
         logger.info("SQLiteStorage ready: %s", self._db_path)
 

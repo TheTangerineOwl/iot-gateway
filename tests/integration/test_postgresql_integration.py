@@ -16,7 +16,7 @@ def connstr(pg) -> str:
     """Собрать connstring из фикстуры pytest-postgresql."""
     i = pg.info
     return (
-        f"postgresql://{i.user}@{i.host}:{i.port}/{i.dbname}"
+        f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}"
     )
 
 

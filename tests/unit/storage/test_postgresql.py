@@ -5,8 +5,7 @@ from datetime import datetime, timezone
 import json
 import psycopg
 from unittest.mock import AsyncMock, MagicMock, patch
-from storage.base import CREATE_TABLE, INSERT_SQL
-from storage.postgresql import PostgresStorage
+from storage.postgresql import STATEMENTS, INSERT_SQL, PostgresStorage
 from models.telemetry import TelemetryRecord
 
 
@@ -57,8 +56,14 @@ async def storage(mock_conn):
 async def test_setup_create_tb(storage, mock_conn, mock_cursor):
     """При запуске хранилища создается подключение и таблица."""
     assert storage._conn is not None
-    mock_cursor.execute.assert_awaited_once()
-    assert mock_cursor.execute.call_args[0][0] == CREATE_TABLE
+    mock_cursor.execute.await_count == len(STATEMENTS)
+
+    actual_calls = [
+        call.args[0]
+        for call in mock_cursor.execute.call_args_list
+    ]
+
+    assert actual_calls == STATEMENTS
     mock_conn.commit.assert_awaited_once()
 
 

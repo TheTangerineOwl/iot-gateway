@@ -3,36 +3,6 @@ from abc import ABC, abstractmethod
 from models.telemetry import TelemetryRecord
 
 
-CREATE_TABLE = """
-CREATE TABLE IF NOT EXISTS telemetry (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    message_id TEXT    NOT NULL,
-    device_id  TEXT    NOT NULL,
-    protocol   TEXT    DEFAULT '',
-    payload    TEXT    NOT NULL,
-    timestamp  REAL    NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_device_id
-    ON telemetry (device_id);
-CREATE INDEX IF NOT EXISTS idx_timestamp
-    ON telemetry (timestamp);
-"""
-
-INSERT_SQL = """
-INSERT INTO telemetry
-    (message_id, device_id, protocol, payload, timestamp)
-VALUES (?, ?, ?, ?, ?);
-"""
-
-SELECT_BY_DEVICE = """
-    SELECT message_id, device_id, protocol, payload, timestamp
-    FROM telemetry
-    WHERE device_id = ?
-    ORDER BY timestamp DESC
-    LIMIT ?;
-"""
-
-
 class StorageBase(ABC):
     """Базовый класс хранилища телеметрии."""
 

@@ -8,7 +8,7 @@ from models.device import DeviceStatus, DeviceType, Device, ProtocolType
 from models.message import Message, MessageType
 
 
-INTEGRATION_PGSQL_CONNSTR = 'postgresql://test:test@localhost:5433/testdb'
+INTEGRATION_PGSQL_CONNSTR = 'postgresql://test:test@localhost:5432/testdb'
 
 
 def pytest_configure(config):

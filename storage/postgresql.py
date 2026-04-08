@@ -5,13 +5,53 @@ from psycopg.connection_async import AsyncConnection
 from psycopg.rows import RowFactory
 import json
 import logging
-from storage.base import (
-    CREATE_TABLE, INSERT_SQL, SELECT_BY_DEVICE, StorageBase
-)
+from storage.base import StorageBase
 from models.telemetry import TelemetryRecord
 
 
 logger = logging.getLogger(__name__)
+
+
+CREATE_TABLE = """
+CREATE TABLE IF NOT EXISTS telemetry (
+    id         BIGSERIAL       PRIMARY KEY,
+    message_id TEXT            NOT NULL,
+    device_id  TEXT            NOT NULL,
+    protocol   TEXT            DEFAULT '',
+    payload    TEXT            NOT NULL,
+    timestamp  DOUBLE PRECISION NOT NULL
+);
+"""
+
+CREATE_IDX_DEVICE = """
+CREATE INDEX IF NOT EXISTS idx_device_id
+    ON telemetry (device_id);
+"""
+
+CREATE_IDX_TS = """
+CREATE INDEX IF NOT EXISTS idx_timestamp
+    ON telemetry (timestamp);
+"""
+
+STATEMENTS = [
+    CREATE_TABLE,
+    CREATE_IDX_DEVICE,
+    CREATE_IDX_TS,
+]
+
+INSERT_SQL = """
+INSERT INTO telemetry
+    (message_id, device_id, protocol, payload, timestamp)
+VALUES (%s, %s, %s, %s, %s);
+"""
+
+SELECT_BY_DEVICE = """
+    SELECT message_id, device_id, protocol, payload, timestamp
+    FROM telemetry
+    WHERE device_id = %s
+    ORDER BY timestamp DESC
+    LIMIT %s;
+"""
 
 
 class PostgresStorage(StorageBase):
@@ -47,7 +87,8 @@ class PostgresStorage(StorageBase):
             if self._conn is None:
                 raise psycopg.DatabaseError('Connection not established')
             async with self._conn.cursor(row_factory=RowFactory) as cur:
-                await cur.execute(CREATE_TABLE)
+                for statement in STATEMENTS:
+                    await cur.execute(statement)
             await self._conn.commit()
             logger.info("PostgresStorage ready")
         except Exception as exc:
