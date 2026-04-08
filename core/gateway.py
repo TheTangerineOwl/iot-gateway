@@ -12,7 +12,9 @@ from core.pipeline.stages import (
 )
 from models.device import DeviceStatus, Device
 from models.message import Message, MessageType
+from storage.base import StorageBase
 from storage.sqlite import SQLiteStorage
+from storage.postgresql import PostgresStorage
 from storage.subscriber import StorageSubscriber
 from protocols.adapter import ProtocolAdapter
 
@@ -38,15 +40,33 @@ class Gateway:
             stale_timeout=env.float('DEVICES_TIMEOUT_STALE', default=30.0 * 4)
         )
         self._pipeline = self._build_pipeline()
-        self._storage = SQLiteStorage(
-            db_path=env.str('STORAGE_DB_CONNSTR', default='data/telemetry.db')
-        )
+        self._storage = self._link_storage()
         self._storage_subscriber = StorageSubscriber(self._storage)
 
     @property
     def is_running(self) -> bool:
         """Работает ли шлюз."""
         return self._running
+
+    def _link_storage(self) -> StorageBase:
+        """Подключить корректное хранилище на основе env."""
+        prefix = env.str('STORAGE_TYPE', default='sqlite')
+        if prefix == 'postgresql' or prefix == 'postgres':
+            return PostgresStorage(
+                connstr=env.str(
+                    'STORAGE_DB_CONNSTR',
+                    default='postgresql://admin:password'
+                            '@localhost:5432/iotgateway'
+                            '?application_name=gateway'
+                )
+            )
+        if prefix == 'sqlite' or 'aiosqlite':
+            return SQLiteStorage(
+                db_path=env.str(
+                    'STORAGE_DB_CONNSTR',
+                    default='data/telemetry.db'
+                )
+            )
 
     def _build_pipeline(self) -> Pipeline:
         """Построить конвейер обработки сообщений."""
@@ -104,7 +124,12 @@ class Gateway:
     async def _start(self) -> None:
         """Запуск шлюза."""
         logger.info('Starting gateway')
-        await self._storage.setup()
+        try:
+            await self._storage.setup()
+        except Exception as exc:
+            logger.exception(
+                "Failed to connect to storage: %s", exc
+            )
         await self._bus.start()
 
         self._bus.subscribe("device.*", self._handle_device_message)

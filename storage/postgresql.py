@@ -28,6 +28,7 @@ class PostgresStorage(StorageBase):
 
     @contextmanager
     async def get_db_connection(self):
+        """Менеджер контекста для PostgreSQL подключения."""
         self._conn = await AsyncConnection.connect(
             conninfo=self._conn_str,
             row_factory=RowFactory
@@ -39,13 +40,20 @@ class PostgresStorage(StorageBase):
 
     async def setup(self) -> None:
         """Открыть БД и создать таблицу."""
-        self._conn = await AsyncConnection.connect(
-            conninfo=self._conn_str
-        )
-        async with self._conn.cursor(row_factory=RowFactory) as cur:
-            await cur.execute(CREATE_TABLE)
-        await self._conn.commit()
-        logger.info("PostgresStorage ready")
+        try:
+            self._conn = await AsyncConnection.connect(
+                conninfo=self._conn_str
+            )
+            if self._conn is None:
+                raise psycopg.DatabaseError('Connection not established')
+            async with self._conn.cursor(row_factory=RowFactory) as cur:
+                await cur.execute(CREATE_TABLE)
+            await self._conn.commit()
+            logger.info("PostgresStorage ready")
+        except Exception as exc:
+            logger.exception(
+                "Coudn't setup PostgreSQL storage: %s", exc
+            )
 
     async def teardown(self) -> None:
         """Закрыть соединение."""
