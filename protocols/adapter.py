@@ -38,7 +38,7 @@ class ProtocolAdapter(ABC):
     @property
     def is_running(self) -> bool:
         """Работает ли адаптер."""
-        return self.is_running
+        return self._running
 
     def set_gateway_context(
             self,

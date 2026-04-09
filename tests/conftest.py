@@ -1,5 +1,6 @@
 """Общие фикстуры для всех модулей."""
 import pytest
+import pytest_asyncio
 import psycopg
 from unittest.mock import AsyncMock
 from core.message_bus import MessageBus
@@ -54,10 +55,13 @@ def device():
     )
 
 
-@pytest.fixture
-def message_bus():
-    """Тестовая шина сообщений."""
-    return MessageBus(max_queue=100)
+@pytest_asyncio.fixture
+async def running_bus():
+    """Рабочая шина."""
+    bus = MessageBus(max_queue=100)
+    await bus.start()
+    yield bus
+    await bus.stop()
 
 
 @pytest.fixture

@@ -1,18 +1,7 @@
 """Тест модуля шины сообщений."""
 import pytest
-import pytest_asyncio
 import asyncio
 from unittest.mock import AsyncMock
-from core.message_bus import MessageBus
-
-
-@pytest_asyncio.fixture
-async def running_bus():
-    """Рабочая шина."""
-    bus = MessageBus(max_queue=100)
-    await bus.start()
-    yield bus
-    await bus.stop()
 
 
 @pytest.mark.asyncio
@@ -36,7 +25,7 @@ async def test_wrong_wild_prefix(
     handler = AsyncMock()
     running_bus.subscribe("processed.telemetry.*", handler)
 
-    await running_bus.publish("telemetry.dev-1", telemetry_message)
+    await running_bus.publish("telemetry.NOT_MATCH", telemetry_message)
     await asyncio.sleep(0.05)
 
     handler.assert_not_awaited()
@@ -83,7 +72,7 @@ async def test_error_count(
 ):
     """Ошибка в обработчике не кладёт шину, счётчик errors растёт."""
     async def bad_handler(msg):
-        raise RuntimeError("kablow")
+        raise RuntimeError("Test error")
 
     running_bus.subscribe("telemetry.*", bad_handler)
     await running_bus.publish("telemetry.dev-1", telemetry_message)

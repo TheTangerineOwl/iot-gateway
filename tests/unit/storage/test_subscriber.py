@@ -23,7 +23,7 @@ async def test_handle_storage_error(
     telemetry_message
 ):
     """Шина должна оставаться живой."""
-    mock_storage.save.side_effect = Exception("db error")
+    mock_storage.save.side_effect = Exception("Test storage error")
     subscriber = StorageSubscriber(mock_storage)
 
     await subscriber.handle(telemetry_message)

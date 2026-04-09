@@ -19,7 +19,7 @@ class FilterStage(PipelineStage):
 
     name = "filter"
 
-    async def process(self, message):
+    async def process(self):
         """Обработка сообщений."""
         return None
 
@@ -68,7 +68,7 @@ async def test_stage_error_count(telemetry_message):
 
         async def process(self, msg):
             """Обработка стадии."""
-            raise ValueError("fail")
+            raise ValueError("Test stage fail")
 
     pipeline = Pipeline()
     pipeline.add_stage(BrokenStage())
