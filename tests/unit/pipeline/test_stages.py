@@ -75,7 +75,7 @@ async def test_auth_wo_register(registry):
     pipeline.add_stage(AuthorizationStage(registry))
     await pipeline.setup()
 
-    msg = Message(device_id="dev-001", payload={"value": 1})
+    msg = Message(device_id="UNAUTH", payload={"value": 1})
     result = await pipeline.execute(msg)
 
     assert result is None
@@ -89,6 +89,7 @@ async def test_auth_error_status(registry, device, telemetry_message):
     pipeline.add_stage(AuthorizationStage(registry))
     await pipeline.setup()
 
+    device.device_id = 'ERR_STATUS'
     device.device_status = DeviceStatus.ERROR
     await registry.register(device)
 

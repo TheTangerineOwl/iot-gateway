@@ -5,7 +5,9 @@ import logging
 from pathlib import Path
 from sys import exit
 from core.gateway import Gateway
+from protocols.adapter import ProtocolAdapter
 from protocols.http_adapter import HTTPAdapter
+from protocols.websocket_adapter import WebSocketAdapter
 from config.config import load_env, get_log_severity
 
 
@@ -15,8 +17,11 @@ ENV_PATH = BASE_DIR / '.env'
 
 def register_adapters(gateway: Gateway):
     """Зарегистрировать адаптеры для протоколов."""
-    adapter = HTTPAdapter()
-    gateway.register_adapter(adapter)
+    adapters: list[ProtocolAdapter] = [
+        HTTPAdapter(), WebSocketAdapter()
+    ]
+    for adapter in adapters:
+        gateway.register_adapter(adapter)
 
 
 async def main():

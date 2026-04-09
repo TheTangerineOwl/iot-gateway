@@ -35,6 +35,8 @@ class ProtocolType(str, Enum):
 
     HTTP = 'http'
     MQTT = 'mqtt'
+    WEBSOCKET = 'websocket'
+    COAP = 'coap'
     MODBUS = 'modbus'
     UNKNOWN = 'unknown'
 

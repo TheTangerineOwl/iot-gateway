@@ -43,6 +43,9 @@ class HTTPAdapter(ProtocolAdapter):
             default='/health'
         )
 
+        self._app: web.Application | None = None
+        self._runner: web.AppRunner | None = None
+
     @property
     def protocol_name(self) -> str:
         """Имя протокола у адаптера."""

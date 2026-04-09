@@ -145,7 +145,7 @@ class TestUnregister:
         cb.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_unregister_slot(self, registry, device):
+    async def test_unregister_slot(self, registry):
         """После удаления освобождается слот."""
         for i in range(registry._max_devices):
             await registry.register(Device(device_id=f"dev-{i}"))
@@ -193,7 +193,7 @@ class TestUpdateStatus:
     @pytest.mark.asyncio
     async def test_update_status_unknown(self, registry):
         """update_status для несуществующего не бросает исключение."""
-        await registry.update_status("ghost", DeviceStatus.ONLINE)
+        await registry.update_status("NOT_EXISTS", DeviceStatus.ONLINE)
 
     @pytest.mark.asyncio
     async def test_status_change_calls_touch(self, registry, device):
