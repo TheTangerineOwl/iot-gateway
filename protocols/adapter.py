@@ -57,7 +57,7 @@ class ProtocolAdapter(ABC):
             raise RuntimeError(
                 f'Adapter {self.protocol_name} not connected to message bus.'
             )
-        message.protocol = self.protocol_name
+        message.protocol = self.protocol_name.lower()
         await self._bus.publish(message_type, message)
 
     # async def send_command(
