@@ -173,10 +173,10 @@ class TestUpdateStatus:
         registry.on_status_change(cb)
 
         await registry.register(device)
-        await registry.update_status(device.device_id, DeviceStatus.ONLINE)
+        await registry.update_status(device.device_id, DeviceStatus.OFFLINE)
 
         cb.assert_awaited_once_with(
-            device, DeviceStatus.OFFLINE, DeviceStatus.ONLINE
+            device, DeviceStatus.ONLINE, DeviceStatus.OFFLINE
         )
 
     @pytest.mark.asyncio
@@ -186,7 +186,7 @@ class TestUpdateStatus:
         registry.on_status_change(cb)
 
         await registry.register(device)
-        await registry.update_status(device.device_id, DeviceStatus.OFFLINE)
+        await registry.update_status(device.device_id, DeviceStatus.ONLINE)
 
         cb.assert_not_awaited()
 
