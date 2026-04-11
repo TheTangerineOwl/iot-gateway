@@ -19,6 +19,14 @@ class DeviceStatus(str, Enum):
     PAIRING = 'pairing'
     SLEEPING = 'sleeping'
 
+    @classmethod
+    def _missing_(cls, value):
+        value = value.lower()
+        for member in cls:
+            if member.lower() == value:
+                return member
+        return None
+
 
 class DeviceType(str, Enum):
     """Тип устройства."""
@@ -28,6 +36,14 @@ class DeviceType(str, Enum):
     CONTROLLER = 'controller'
     GATEWAY = 'gateway'
     UNKNOWN = 'unknown'
+
+    @classmethod
+    def _missing_(cls, value):
+        value = value.lower()
+        for member in cls:
+            if member.lower() == value:
+                return member
+        return None
 
 
 class ProtocolType(str, Enum):
@@ -39,6 +55,14 @@ class ProtocolType(str, Enum):
     COAP = 'CoAP'
     MODBUS = 'Modbus'
     UNKNOWN = 'Unknown'
+
+    @classmethod
+    def _missing_(cls, value):
+        value = value.lower()
+        for member in cls:
+            if member.lower() == value:
+                return member
+        return None
 
 
 @dataclass

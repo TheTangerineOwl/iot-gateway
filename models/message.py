@@ -22,6 +22,14 @@ class MessageType(str, Enum):
     REGISTRATION = "register"
     HEARTBEAT = "heartbeat"
 
+    @classmethod
+    def _missing_(cls, value):
+        value = value.lower()
+        for member in cls:
+            if member.lower() == value:
+                return member
+        return None
+
 
 @dataclass
 class Message:
