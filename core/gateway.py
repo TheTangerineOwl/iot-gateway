@@ -103,6 +103,11 @@ class Gateway:
                 f'processed.telemetry.{result.device_id}',
                 result
             )
+        else:
+            await self._bus.publish(
+                f'rejected.telemetry.{message.device_id}',
+                message
+            )
 
     async def _handle_device_message(self, message: Message) -> None:
         """Обработать технические сообщения."""

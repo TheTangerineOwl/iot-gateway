@@ -18,6 +18,7 @@ class DeviceStatus(str, Enum):
     ERROR = 'error'
     PAIRING = 'pairing'
     SLEEPING = 'sleeping'
+    UNKNOWN = 'unknown'
 
     @classmethod
     def _missing_(cls, value):
@@ -25,7 +26,7 @@ class DeviceStatus(str, Enum):
         for member in cls:
             if member.lower() == value:
                 return member
-        return None
+        return cls.UNKNOWN
 
 
 class DeviceType(str, Enum):
@@ -43,7 +44,7 @@ class DeviceType(str, Enum):
         for member in cls:
             if member.lower() == value:
                 return member
-        return None
+        return cls.UNKNOWN
 
 
 class ProtocolType(str, Enum):
@@ -62,7 +63,7 @@ class ProtocolType(str, Enum):
         for member in cls:
             if member.lower() == value:
                 return member
-        return None
+        return cls.UNKNOWN
 
 
 @dataclass

@@ -14,7 +14,7 @@ import logging
 from http import HTTPStatus
 from typenv import Env
 from typing import Any
-from models.message import MessageType
+from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
 from protocols.message_builder import MessageBuilder, CommonErrMsg
@@ -98,6 +98,9 @@ class WebSocketAdapter(ProtocolAdapter):
         site = web.TCPSite(self._runner, self._host, self._port)
         await site.start()
 
+        assert self._bus is not None
+        self._bus.subscribe('rejected.telemetry.*', self._handle_rejected)
+
         self._running = True
         logger.info(
             'WebSocket adapter listening on %s:%d  (ws://%s:%d%s)',
@@ -127,6 +130,25 @@ class WebSocketAdapter(ProtocolAdapter):
             await self._runner.cleanup()
 
         logger.info('WebSocket adapter stopped')
+
+    async def _handle_rejected(self, message: Message) -> None:
+        ws = self._connections.get(message.device_id)
+        if not ws or ws.closed:
+            return
+        reason = message.metadata.get('reject_reason', 'filtered')
+        stage = message.metadata.get('reject_stage', 'unknown')
+        await ws.send_json(
+            MessageBuilder.build_msg(
+                message=message,
+                status='rejected',
+                reason=reason,
+                stage=stage
+            )
+        )
+        logger.debug(
+            "Sent rejection to device '%s': %s @ %s",
+            message.device_id, reason, stage
+        )
 
     async def _handle_ws_ingest(
             self, request: web.Request
@@ -235,8 +257,13 @@ class WebSocketAdapter(ProtocolAdapter):
             )
             return device_id
 
-        msg_type = body.get('message_type', 'telemetry')
-        incoming_id = body.get('device_id', device_id or '')
+        msgtypestr = body.get('message_type', None)
+        if msgtypestr is None:
+            msg_type = MessageType.TELEMETRY
+        else:
+            msg_type = MessageType(msgtypestr)
+        # msg_type = MessageType(body.get('message_type', 'telemetry'))
+        incoming_id = str(body.get('device_id', device_id or ''))
 
         if not incoming_id:
             await self._send_error(
@@ -248,13 +275,7 @@ class WebSocketAdapter(ProtocolAdapter):
 
         if device_id != incoming_id:
             device_id = incoming_id
-            if device_id is None:  # для Mypy
-                await self._send_error(
-                    ws,
-                    error=CommonErrMsg.MISSING_DEVICE_ID.value,
-                    error_code=CommonErrMsg.MISSING_DEVICE_ID.name
-                )
-                return device_id
+            assert device_id is not None
             self._connections[device_id] = ws
             logger.debug(
                 "WebSocket device identified: '%s' (%s)",
@@ -262,18 +283,25 @@ class WebSocketAdapter(ProtocolAdapter):
                 meta.get('remote_addr', ''),
             )
 
-        if msg_type == 'telemetry':
-            await self._process_telemetry(ws, body, meta, device_id)
+        try:
+            if msg_type == MessageType.TELEMETRY:
+                await self._process_telemetry(ws, body, meta, device_id)
 
-        elif msg_type == 'heartbeat':
-            await self._process_heartbeat(ws, body, meta, device_id)
+            elif msg_type == MessageType.HEARTBEAT:
+                await self._process_heartbeat(ws, body, meta, device_id)
 
-        elif msg_type == 'register':
-            await self._process_ws_register(ws, body, meta, device_id)
+            elif msg_type == MessageType.REGISTRATION:
+                await self._process_ws_register(ws, body, meta, device_id)
 
-        else:
+            else:
+                await self._send_error(
+                    ws, f"Unknown message type: '{msg_type}'", 'UNKNOWN_TYPE'
+                )
+        except Exception:
             await self._send_error(
-                ws, f"Unknown message type: '{msg_type}'", 'UNKNOWN_TYPE'
+                ws,
+                'Internal server error',
+                CommonErrMsg.INTERNAL_SERVER_ERROR
             )
 
         return device_id

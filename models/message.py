@@ -21,6 +21,7 @@ class MessageType(str, Enum):
     STATUS = "status"
     REGISTRATION = "register"
     HEARTBEAT = "heartbeat"
+    UNKNOWN = "unknown"
 
     @classmethod
     def _missing_(cls, value):
@@ -28,7 +29,7 @@ class MessageType(str, Enum):
         for member in cls:
             if member.lower() == value:
                 return member
-        return None
+        return cls.UNKNOWN
 
 
 @dataclass
@@ -49,16 +50,16 @@ class Message:
     def to_dict(self) -> dict[str, Any]:
         """Получить данные сообщения."""
         return {
-            'message_id': self.message_id,
-            'message_type': self.message_type.value,
-            'message_topic': self.message_topic,
-            'device_id': self.device_id,
-            'payload': self.payload,
-            'timestamp': self.timestamp,
-            'processed': self.processed,
-            'protocol': self.protocol,
-            'schema_version': self.schema_version,
-            'metadata': self.metadata
+            'message_id': str(self.message_id),
+            'message_type': MessageType(self.message_type),
+            'message_topic': str(self.message_topic),
+            'device_id': str(self.device_id),
+            'payload': dict(self.payload),
+            'timestamp': float(self.timestamp),
+            'processed': bool(self.processed),
+            'protocol': ProtocolType(self.protocol),
+            'schema_version': str(self.schema_version),
+            'metadata': dict(self.metadata)
         }
 
     @classmethod
