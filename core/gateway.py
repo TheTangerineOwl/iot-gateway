@@ -10,7 +10,7 @@ from core.pipeline.pipeline import Pipeline
 from core.pipeline.stages import (
     ValidationStage, AuthorizationStage, CleanupStage
 )
-from models.device import DeviceStatus, Device
+from models.device import DeviceStatus, Device, ProtocolType
 from models.message import Message, MessageType
 from storage.base import StorageBase
 from storage.sqlite import SQLiteStorage
@@ -30,7 +30,7 @@ class Gateway:
 
     def __init__(self) -> None:
         """Основной модуль работы шлюза."""
-        self._adapters: dict[str, ProtocolAdapter] = {}
+        self._adapters: dict[ProtocolType, ProtocolAdapter] = {}
         self._running = False
 
         self._bus = MessageBus(
@@ -122,16 +122,17 @@ class Gateway:
 
     def register_adapter(self, adapter: ProtocolAdapter) -> None:
         """Зарегистрировать адаптер протокола."""
-        name = adapter.protocol_name
-        if name in self._adapters:
-            raise ValueError(f"Adapter '{name}' already registered")
+        ad_type = adapter.protocol_type
+        ad_name = adapter.protocol_name
+        if ad_type in self._adapters:
+            raise ValueError(f"Adapter '{ad_name}' already registered")
 
         adapter.set_gateway_context(
             message_bus=self._bus,
             registry=self._registry,
         )
-        self._adapters[name] = adapter
-        logger.debug("Protocol adapter registered: %s", name)
+        self._adapters[ad_type] = adapter
+        logger.debug("Protocol adapter registered: %s", ad_name)
 
     async def _start(self) -> None:
         """Запуск шлюза."""
@@ -160,7 +161,7 @@ class Gateway:
         for name, adapter in self._adapters.items():
             try:
                 await adapter.start()
-                logger.debug("Adapter '%s' started", name)
+                logger.debug("Adapter '%s' started", name.value)
             except Exception as exc:
                 logger.error(
                     "Failed to start adapter '%s': %s",
@@ -172,7 +173,8 @@ class Gateway:
         self._running = True
         logger.info(
             "Gateway started. Adapters: %s",
-            list(self._adapters.keys())
+            # list(self._adapters.keys())
+            [t.value for t in self._adapters.keys()]
         )
 
     async def _stop(self) -> None:
@@ -183,17 +185,43 @@ class Gateway:
         for name, adapter in reversed(list(self._adapters.items())):
             try:
                 await adapter.stop()
-                logger.debug("Adapter '%s' stopped", name)
+                logger.debug("Adapter '%s' stopped", name.value)
             except Exception as exc:
                 logger.error(
                     "Error stopping adapter '%s': %s",
                     name, exc, exc_info=True
                 )
 
-        await self._registry.stop_monitor()
-        await self._pipeline.teardown()
-        await self._bus.stop()
-        await self._storage.teardown()
+        try:
+            await self._registry.stop_monitor()
+        except Exception as exc:
+            logger.exception(
+                'Error during registry stop: %s',
+                exc
+            )
+
+        try:
+            await self._pipeline.teardown()
+        except Exception as exc:
+            logger.exception(
+                'Error during pipeline teardown: %s',
+                exc
+            )
+
+        try:
+            await self._bus.stop()
+        except Exception as exc:
+            logger.exception(
+                'Error during bus stop: %s',
+                exc
+            )
+        try:
+            await self._storage.teardown()
+        except Exception as exc:
+            logger.exception(
+                'Error during storage teardown: %s',
+                exc
+            )
 
         logger.info("Gateway stopped")
 

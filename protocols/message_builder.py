@@ -83,7 +83,7 @@ class MessageBuilder:
     @staticmethod
     def normalize(
         body: dict[str, Any],
-        protocol_name: ProtocolType = ProtocolType.UNKNOWN,
+        protocol: ProtocolType = ProtocolType.UNKNOWN,
         topic: str = '',
         proto_meta: Any | None = None,
         message_type: MessageType = MessageType.TELEMETRY
@@ -118,11 +118,11 @@ class MessageBuilder:
             message_topic=topic,
             message_type=message_type,
             device_id=device_id,
-            protocol=protocol_name,
+            protocol=protocol,
             schema_version=schema_version,
             payload=payload,
             metadata={
-                protocol_name: proto_meta
+                protocol: proto_meta
             } if proto_meta
             else {}
         )

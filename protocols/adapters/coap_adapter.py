@@ -8,6 +8,7 @@ import logging
 from typenv import Env
 from typing import Any
 from models.message import MessageType
+from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
 from protocols.message_builder import MessageBuilder
 
@@ -49,7 +50,7 @@ class _IngestResource(resource.Resource):
 
         message = MessageBuilder.normalize(
             body,
-            protocol_name=self._adapter.protocol_name,
+            protocol=self._adapter.protocol_type,
             topic=self._adapter.url_ingest,
             message_type=MessageType.TELEMETRY
         )
@@ -102,7 +103,7 @@ class _RegisterResource(resource.Resource):
 
         message = MessageBuilder.normalize(
             body,
-            protocol_name=self._adapter.protocol_name,
+            protocol=self._adapter.protocol_type,
             topic=self._adapter.url_register,
             message_type=MessageType.REGISTRATION
         )
@@ -179,9 +180,9 @@ class CoAPAdapter(ProtocolAdapter):
         self._serve_task: asyncio.Task | None = None
 
     @property
-    def protocol_name(self) -> str:
-        """Имя протокола у адаптера."""
-        return 'CoAP'
+    def protocol_type(self) -> ProtocolType:
+        """Тип протокола у адаптера."""
+        return ProtocolType.COAP
 
     @property
     def url_ingest(self) -> str:

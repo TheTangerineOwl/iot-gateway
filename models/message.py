@@ -61,7 +61,7 @@ class Message:
                 json.get('message_id', str(uuid4()))
             ),
             message_type=MessageType(
-                str(json.get('message_type', MessageType.TELEMETRY)).lower()
+                str(json.get('message_type', MessageType.TELEMETRY))
             ),
             message_topic=str(
                 json.get('message_topic', '')
@@ -70,7 +70,7 @@ class Message:
                 json.get('device_id', '')
             ),
             protocol=ProtocolType(
-                str(json.get('protocol', ProtocolType.UNKNOWN)).lower()
+                str(json.get('protocol', ProtocolType.UNKNOWN))
             ),
             payload=dict(
                 json.get('payload', dict())

@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import logging
 from typing import Any
 from models.message import Message
+from models.device import ProtocolType
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 
@@ -18,12 +19,18 @@ class ProtocolAdapter(ABC):
         self._bus: MessageBus | None = None
         self._registry: DeviceRegistry | None = None
         self._running = False
+        # self._protocol_type: ProtocolType = ProtocolType.UNKNOWN
+
+    @property
+    def protocol_name(self) -> str:
+        """Имя протокола"""
+        return self.protocol_type.value
 
     @property
     @abstractmethod
-    def protocol_name(self) -> str:
-        """Имя протокола."""
-        pass
+    def protocol_type(self) -> ProtocolType:
+        """Тип протокола."""
+        return ProtocolType.UNKNOWN
 
     @abstractmethod
     async def start(self) -> None:
@@ -57,7 +64,7 @@ class ProtocolAdapter(ABC):
             raise RuntimeError(
                 f'Adapter {self.protocol_name} not connected to message bus.'
             )
-        message.protocol = self.protocol_name.lower()
+        message.protocol = self.protocol_type
         await self._bus.publish(message_type, message)
 
     # async def send_command(

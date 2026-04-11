@@ -33,12 +33,12 @@ class DeviceType(str, Enum):
 class ProtocolType(str, Enum):
     """Тип протокола."""
 
-    HTTP = 'http'
-    MQTT = 'mqtt'
-    WEBSOCKET = 'websocket'
-    COAP = 'coap'
-    MODBUS = 'modbus'
-    UNKNOWN = 'unknown'
+    HTTP = 'HTTP'
+    MQTT = 'MQTT'
+    WEBSOCKET = 'WebSocket'
+    COAP = 'CoAP'
+    MODBUS = 'Modbus'
+    UNKNOWN = 'Unknown'
 
 
 @dataclass
@@ -86,13 +86,13 @@ class Device:
                 data.get("name", "")
             ),
             device_type=DeviceType(
-                str(data.get("device_type", "unknown")).lower()
+                str(data.get("device_type", "unknown"))
             ),
             protocol=ProtocolType(
-                str(data.get("protocol", "unknown")).lower()
+                str(data.get("protocol", "unknown"))
             ),
             device_status=DeviceStatus(
-                str(data.get("device_status", "offline")).lower()
+                str(data.get("device_status", "offline"))
             ),
             last_response=float(
                 data.get("last_response", 0.0)

@@ -14,6 +14,7 @@ import logging
 from typenv import Env
 from typing import Any
 from models.message import MessageType
+from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
 from protocols.message_builder import MessageBuilder
 
@@ -48,9 +49,9 @@ class HTTPAdapter(ProtocolAdapter):
         self._runner: web.AppRunner | None = None
 
     @property
-    def protocol_name(self) -> str:
-        """Имя протокола у адаптера."""
-        return "HTTP"
+    def protocol_type(self) -> ProtocolType:
+        """Тип протокола."""
+        return ProtocolType.HTTP
 
     def _build_meta(self, request: web.Request):
         return {
@@ -118,7 +119,7 @@ class HTTPAdapter(ProtocolAdapter):
 
         message = MessageBuilder.normalize(
             body,
-            protocol_name=self.protocol_name,
+            protocol=self.protocol_type,
             topic=self._wh_telemetry,
             proto_meta=proto_meta
         )
@@ -152,7 +153,7 @@ class HTTPAdapter(ProtocolAdapter):
 
         message = MessageBuilder.normalize(
             body,
-            protocol_name=self.protocol_name,
+            protocol=self.protocol_type,
             topic=self._url_register,
             proto_meta=proto_meta,
             message_type=MessageType.REGISTRATION

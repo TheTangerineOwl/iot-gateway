@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from models.message import MessageType
+from models.device import ProtocolType
 from protocols.adapters.coap_adapter import (
     CoAPAdapter,
     _IngestResource,
@@ -237,7 +238,7 @@ class TestIngestResource:
         await resource.render_post(request)
 
         _, msg = mock_bus.publish.call_args.args
-        assert msg.protocol == "coap"
+        assert msg.protocol == ProtocolType.COAP
 
     @pytest.mark.asyncio
     async def test_missing_device_id_returns_bad_request(
@@ -405,7 +406,7 @@ class TestRegisterResource:
         await resource.render_post(request)
 
         _, msg = mock_bus.publish.call_args.args
-        assert msg.protocol == "coap"
+        assert msg.protocol == ProtocolType.COAP
 
     @pytest.mark.asyncio
     async def test_register_payload_contains_full_body(self):

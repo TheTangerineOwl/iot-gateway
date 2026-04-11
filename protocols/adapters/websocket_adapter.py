@@ -15,6 +15,7 @@ from http import HTTPStatus
 from typenv import Env
 from typing import Any
 from models.message import MessageType
+from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
 from protocols.message_builder import MessageBuilder, CommonErrMsg
 
@@ -51,9 +52,9 @@ class WebSocketAdapter(ProtocolAdapter):
         self._heartbeat = heartbeat
 
     @property
-    def protocol_name(self) -> str:
-        """Имя протокола у адаптера."""
-        return 'WebSocket'
+    def protocol_type(self) -> ProtocolType:
+        """Тип протокола у адаптера."""
+        return ProtocolType.WEBSOCKET
 
     def _build_meta(self, request: web.Request):
         return {
@@ -186,7 +187,7 @@ class WebSocketAdapter(ProtocolAdapter):
 
         message = MessageBuilder.normalize(
             body,
-            protocol_name=self.protocol_name,
+            protocol=self.protocol_type,
             proto_meta=self._build_meta(request),
             topic=self._url_register,
             message_type=MessageType.REGISTRATION
@@ -288,7 +289,7 @@ class WebSocketAdapter(ProtocolAdapter):
         message = MessageBuilder.normalize(
             message_type=MessageType.TELEMETRY,
             body=body,
-            protocol_name=self.protocol_name,
+            protocol=self.protocol_type,
             proto_meta=meta,
             topic=f'telemetry.{device_id}'
         )
@@ -312,7 +313,7 @@ class WebSocketAdapter(ProtocolAdapter):
         """Обработать heartbeat-сообщение по WebSocket."""
         message = MessageBuilder.normalize(
             body,
-            protocol_name=self.protocol_name,
+            protocol=self.protocol_type,
             proto_meta=meta,
             topic=f'device.heartbeat.{device_id}',
             message_type=MessageType.HEARTBEAT
@@ -337,7 +338,7 @@ class WebSocketAdapter(ProtocolAdapter):
         """Обработать регистрацию устройства, пришедшую по WebSocket."""
         message = MessageBuilder.normalize(
             body,
-            protocol_name=self.protocol_name,
+            protocol=self.protocol_type,
             proto_meta=meta,
             message_type=MessageType.REGISTRATION,
             topic=f'device.register.{device_id}'
