@@ -15,8 +15,8 @@ from http import HTTPStatus
 from typenv import Env
 from typing import Any
 from models.message import MessageType
-from protocols.adapter import ProtocolAdapter
-from .message_builder import MessageBuilder, CommonErrMsg
+from protocols.adapters.base import ProtocolAdapter
+from protocols.message_builder import MessageBuilder, CommonErrMsg
 
 
 env = Env(upper=True)

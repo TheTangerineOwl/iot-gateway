@@ -1,5 +1,8 @@
 """Модуль адаптеров для протоколов взаимодействия с устройствами."""
-from .adapter import ProtocolAdapter
-from .http_adapter import HTTPAdapter
+from .adapters import __all__ as all_adapters
+from .message_builder import MessageBuilder, CommonErrMsg
 
-__all__ = ['ProtocolAdapter', 'HTTPAdapter']
+
+__all__ = [
+    'MessageBuilder', 'CommonErrMsg'
+] + all_adapters

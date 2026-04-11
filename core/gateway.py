@@ -16,8 +16,10 @@ from storage.base import StorageBase
 from storage.sqlite import SQLiteStorage
 from storage.postgresql import PostgresStorage
 from storage.subscriber import StorageSubscriber
-from protocols.adapter import ProtocolAdapter
-
+from protocols.adapters.base import ProtocolAdapter
+from protocols.adapters.coap_adapter import CoAPAdapter
+from protocols.adapters.http_adapter import HTTPAdapter
+from protocols.adapters.websocket_adapter import WebSocketAdapter
 
 env = Env(upper=True)
 logger = logging.getLogger(__name__)
@@ -39,9 +41,16 @@ class Gateway:
             max_devices=env.int('DEVICES_MAX', default=1000),
             stale_timeout=env.float('DEVICES_TIMEOUT_STALE', default=30.0 * 4)
         )
+
         self._pipeline = self._build_pipeline()
         self._storage = self._link_storage()
         self._storage_subscriber = StorageSubscriber(self._storage)
+
+        self._reg_adapters(
+            HTTPAdapter(),
+            WebSocketAdapter(),
+            CoAPAdapter()
+        )
 
     @property
     def is_running(self) -> bool:
@@ -67,6 +76,11 @@ class Gateway:
                     default='data/telemetry.db'
                 )
             )
+
+    def _reg_adapters(self, *args: ProtocolAdapter) -> None:
+        """Регистрирует все переданные адаптеры."""
+        for ad in args:
+            self.register_adapter(ad)
 
     def _build_pipeline(self) -> Pipeline:
         """Построить конвейер обработки сообщений."""

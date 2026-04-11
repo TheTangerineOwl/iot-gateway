@@ -8,8 +8,8 @@ import logging
 from typenv import Env
 from typing import Any
 from models.message import MessageType
-from protocols.adapter import ProtocolAdapter
-from .message_builder import MessageBuilder
+from protocols.adapters.base import ProtocolAdapter
+from protocols.message_builder import MessageBuilder
 
 
 env = Env(upper=True)

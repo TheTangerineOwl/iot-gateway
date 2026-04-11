@@ -6,7 +6,7 @@ import asyncio
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from http import HTTPStatus
-from protocols.http_adapter import HTTPAdapter
+from protocols.adapters.http_adapter import HTTPAdapter
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from models.message import MessageType, Message
@@ -80,11 +80,11 @@ class TestLifecycle:
 
         with (
             patch(
-                'protocols.http_adapter.web.AppRunner',
+                'aiohttp.web.AppRunner',
                 return_value=mock_runner
             ),
             patch(
-                'protocols.http_adapter.web.TCPSite',
+                'aiohttp.web.TCPSite',
                 return_value=mock_site
             )
         ):
@@ -101,11 +101,11 @@ class TestLifecycle:
 
         with (
             patch(
-                'protocols.http_adapter.web.AppRunner',
+                'aiohttp.web.AppRunner',
                 return_value=mock_runner
             ),
             patch(
-                'protocols.http_adapter.web.TCPSite',
+                'aiohttp.web.TCPSite',
                 return_value=mock_site
             )
         ):

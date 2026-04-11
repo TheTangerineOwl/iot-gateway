@@ -5,24 +5,11 @@ import logging
 from pathlib import Path
 from sys import exit
 from core.gateway import Gateway
-from protocols.adapter import ProtocolAdapter
-from protocols.coap_adapter import CoAPAdapter
-from protocols.http_adapter import HTTPAdapter
-from protocols.websocket_adapter import WebSocketAdapter
 from config.config import load_env, get_log_severity
 
 
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / '.env'
-
-
-def register_adapters(gateway: Gateway):
-    """Зарегистрировать адаптеры для протоколов."""
-    adapters: list[ProtocolAdapter] = [
-        HTTPAdapter(), WebSocketAdapter(), CoAPAdapter()
-    ]
-    for adapter in adapters:
-        gateway.register_adapter(adapter)
 
 
 async def main():
@@ -32,8 +19,6 @@ async def main():
     Инициализирует шлюз, задает логирование, регистрирует адаптеры
     и запускает бесконечный цикл работы.
     """
-    gateway = Gateway()
-
     load_env(ENV_PATH)
 
     logging.basicConfig(
@@ -48,7 +33,8 @@ async def main():
     logging.getLogger('asyncio').setLevel(logging.WARNING)
     logging.getLogger('aiosqlite').setLevel(logging.WARNING)
     logging.getLogger('coap-server').setLevel(logging.WARNING)
-    register_adapters(gateway)
+
+    gateway = Gateway()
     await gateway.run_forever()
 
 

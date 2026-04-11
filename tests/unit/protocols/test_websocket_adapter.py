@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 from aiohttp.test_utils import TestClient, TestServer
 from aiohttp import web
 from http import HTTPStatus
-from protocols.websocket_adapter import WebSocketAdapter
+from protocols.adapters.websocket_adapter import WebSocketAdapter
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from models.message import MessageType, Message
@@ -95,8 +95,8 @@ class TestLifecycle:
     async def test_start_sets_running(self, adapter: WebSocketAdapter):
         """После запуска адаптера свойство running=True."""
         with (
-            patch('protocols.websocket_adapter.web.AppRunner') as mock_runner,
-            patch('protocols.websocket_adapter.web.TCPSite') as mock_site
+            patch('aiohttp.web.AppRunner') as mock_runner,
+            patch('aiohttp.web.TCPSite') as mock_site
         ):
             mock_runner.return_value.setup = AsyncMock()
             mock_site.return_value.start = AsyncMock()
@@ -110,8 +110,8 @@ class TestLifecycle:
     async def test_stop_clears_running(self, adapter: WebSocketAdapter):
         """После остановки адаптера свойство running=False."""
         with (
-            patch('protocols.websocket_adapter.web.AppRunner') as mock_runner,
-            patch('protocols.websocket_adapter.web.TCPSite') as mock_site
+            patch('aiohttp.web.AppRunner') as mock_runner,
+            patch('aiohttp.web.TCPSite') as mock_site
         ):
             mock_runner.return_value.setup = AsyncMock()
             mock_site.return_value.start = AsyncMock()
@@ -131,8 +131,8 @@ class TestLifecycle:
         adapter._connections["dev-x"] = mock_ws
 
         with (
-            patch('protocols.websocket_adapter.web.AppRunner') as mock_runner,
-            patch('protocols.websocket_adapter.web.TCPSite') as mock_site
+            patch('aiohttp.web.AppRunner') as mock_runner,
+            patch('aiohttp.web.TCPSite') as mock_site
         ):
             mock_runner.return_value.setup = AsyncMock()
             mock_site.return_value.start = AsyncMock()

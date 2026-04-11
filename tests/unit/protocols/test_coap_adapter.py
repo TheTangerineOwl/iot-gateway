@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from models.message import MessageType
-from protocols.coap_adapter import (
+from protocols.adapters.coap_adapter import (
     CoAPAdapter,
     _IngestResource,
     _RegisterResource,
