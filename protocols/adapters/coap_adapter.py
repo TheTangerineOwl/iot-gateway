@@ -7,7 +7,7 @@ import json
 import logging
 from typenv import Env
 from typing import Any
-from models.message import MessageType
+from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
 from protocols.message_builder import MessageBuilder
@@ -47,20 +47,35 @@ class _IngestResource(resource.Resource):
                 ).encode(),
                 content_format=ContentFormat.JSON,
             )
-
-        message = MessageBuilder.normalize(
-            body,
-            protocol=self._adapter.protocol_type,
-            topic=self._adapter.url_ingest,
-            message_type=MessageType.TELEMETRY
-        )
-
+        sub = None
         try:
+
+            message = MessageBuilder.normalize(
+                body,
+                protocol=self._adapter.protocol_type,
+                topic=self._adapter.url_ingest,
+                message_type=MessageType.TELEMETRY
+            )
+
+            if not self._adapter._bus:
+                raise RuntimeError(
+                    f'Adapter {self._adapter.protocol_name} not '
+                    'connected to message bus.'
+                )
+            sub = self._adapter._bus.subscribe(
+                f'rejected.telemetry.{device_id}',
+                self._adapter._handle_rejected_base
+            )
+            fut = self._adapter._register_pending(message)
+
             await self._adapter._publish_message(
                 f'telemetry.{device_id}', message
             )
         except RuntimeError as exc:
+            self._adapter._pending.pop(message.message_id, None)
             logger.error('CoAP ingest: publish error — %s', exc)
+            if sub and self._adapter._bus:
+                self._adapter._bus.unsubscribe(sub)
             return aiocoap.Message(
                 code=aiocoap.INTERNAL_SERVER_ERROR,
                 payload=json.dumps(
@@ -71,6 +86,32 @@ class _IngestResource(resource.Resource):
 
         logger.log(5, 'CoAP adapter got telemetry: %s', message.to_dict())
 
+        try:
+            rejected_msg: Message = await asyncio.wait_for(
+                asyncio.shield(fut),
+                timeout=self._adapter._timeout_reject
+            )
+            reason = rejected_msg.metadata.get('reject_reason', 'filtered')
+            stage = rejected_msg.metadata.get('reject_stage', 'unknown')
+            self._adapter._bus.unsubscribe(sub)
+            return aiocoap.Message(
+                code=aiocoap.FORBIDDEN,
+                payload=json.dumps(
+                    MessageBuilder.build_msg(
+                        rejected_msg,
+                        status='rejected',
+                        reason=reason,
+                        stage=stage
+                    )
+                ).encode(),
+                content_format=ContentFormat.JSON
+            )
+        except asyncio.TimeoutError:
+            pass
+        finally:
+            self._adapter._pending.pop(message.message_id, None)
+        if sub:
+            self._adapter._bus.unsubscribe(sub)
         return aiocoap.Message(
             code=aiocoap.CHANGED,
             payload=json.dumps(
@@ -179,6 +220,10 @@ class CoAPAdapter(ProtocolAdapter):
         self._context: aiocoap.Context | None = None
         self._serve_task: asyncio.Task | None = None
 
+        self._timeout_reject: float = env.float(
+            'COAP_TIMEOUT_REJECT', default=1.0
+        )
+
     @property
     def protocol_type(self) -> ProtocolType:
         """Тип протокола у адаптера."""
@@ -226,6 +271,12 @@ class CoAPAdapter(ProtocolAdapter):
         self._context = await aiocoap.Context.create_server_context(
             root, bind=bind
         )
+
+        # assert self._bus is not None
+        # self._bus.subscribe(
+        #     'rejected.telemetry.*',
+        #     self._handle_rejected_base
+        # )
 
         self._running = True
         logger.info(

@@ -98,8 +98,8 @@ class WebSocketAdapter(ProtocolAdapter):
         site = web.TCPSite(self._runner, self._host, self._port)
         await site.start()
 
-        assert self._bus is not None
-        self._bus.subscribe('rejected.telemetry.*', self._handle_rejected)
+        # assert self._bus is not None
+        # self._bus.subscribe('rejected.telemetry.*', self._handle_rejected)
 
         self._running = True
         logger.info(
@@ -190,6 +190,8 @@ class WebSocketAdapter(ProtocolAdapter):
         finally:
             if device_id and self._connections.get(device_id) is ws:
                 del self._connections[device_id]
+                assert self._bus is not None
+                self._bus.unsubscribe_from(f'rejected.telemetry.{device_id}')
                 logger.debug(
                     "WebSocket connection closed for device '%s'",
                     device_id,
@@ -277,6 +279,15 @@ class WebSocketAdapter(ProtocolAdapter):
             device_id = incoming_id
             assert device_id is not None
             self._connections[device_id] = ws
+            if not self._bus:
+                raise RuntimeError(
+                    f'Adapter {self.protocol_name} not '
+                    'connected to message bus.'
+                )
+            self._bus.subscribe(
+                f'rejected.telemetry.{device_id}',
+                self._handle_rejected
+            )
             logger.debug(
                 "WebSocket device identified: '%s' (%s)",
                 device_id,
@@ -297,7 +308,8 @@ class WebSocketAdapter(ProtocolAdapter):
                 await self._send_error(
                     ws, f"Unknown message type: '{msg_type}'", 'UNKNOWN_TYPE'
                 )
-        except Exception:
+        except Exception as exc:
+            logger.exception('Error in WS dispatch: %s', exc)
             await self._send_error(
                 ws,
                 'Internal server error',

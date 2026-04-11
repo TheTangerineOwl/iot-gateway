@@ -7,13 +7,14 @@
     POST /api/v1/devices/register регистрация устройства
     GET /api/v1/health чек
 """
+import asyncio
 from aiohttp import web
 from http import HTTPStatus
 import json
 import logging
 from typenv import Env
 from typing import Any
-from models.message import MessageType
+from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
 from protocols.message_builder import MessageBuilder
@@ -47,6 +48,7 @@ class HTTPAdapter(ProtocolAdapter):
 
         self._app: web.Application | None = None
         self._runner: web.AppRunner | None = None
+        self._timeout: float = 2.0
 
     @property
     def protocol_type(self) -> ProtocolType:
@@ -90,6 +92,12 @@ class HTTPAdapter(ProtocolAdapter):
         site = web.TCPSite(self._runner, self._host, self._port)
         await site.start()
 
+        # assert self._bus is not None
+        # self._bus.subscribe(
+        #     'rejected.telemetry.*',
+        #     self._handle_rejected_base
+        # )
+
         self._running = True
         logger.info(
             "HTTP adapter listening on %s:%d  (http://%s:%d%s)",
@@ -130,10 +138,41 @@ class HTTPAdapter(ProtocolAdapter):
                 status=HTTPStatus.BAD_REQUEST
             )
 
+        fut = self._register_pending(message)
+
+        assert self._bus is not None
+        sub = self._bus.subscribe(
+            f'rejected.telemetry.{message.device_id}',
+            self._handle_rejected_base
+        )
+
         await self._publish_message(f"telemetry.{message.device_id}", message)
 
         logger.log(5, 'HTTP adapter got telemetry: %s', message.to_dict())
 
+        try:
+            rejected_msg: Message = await asyncio.wait_for(
+                asyncio.shield(fut),
+                timeout=self._timeout
+            )
+            reason = rejected_msg.metadata.get('reject_reason', 'filtered')
+            stage = rejected_msg.metadata.get('reject_stage', 'unknown')
+            self._bus.unsubscribe(sub)
+            return web.json_response(
+                MessageBuilder.build_msg(
+                    rejected_msg,
+                    status='rejected',
+                    reason=reason,
+                    stage=stage
+                ),
+                status=HTTPStatus.UNPROCESSABLE_ENTITY
+            )
+        except asyncio.TimeoutError:
+            pass
+        finally:
+            self._pending.pop(message.message_id, None)
+
+        self._bus.unsubscribe(sub)
         return web.json_response(
             MessageBuilder.build_msg(message, 'accepted'),
             status=HTTPStatus.ACCEPTED

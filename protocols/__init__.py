@@ -5,4 +5,6 @@ from .message_builder import MessageBuilder, CommonErrMsg
 
 __all__ = [
     'MessageBuilder', 'CommonErrMsg'
-] + all_adapters
+]
+
+__all__ += all_adapters

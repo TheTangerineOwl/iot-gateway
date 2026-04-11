@@ -17,7 +17,7 @@ class Subscription:
     """Подписка на тему сообщения."""
 
     handler: Callable[[Message], Coroutine[Any, Any, None]]
-    mes_type: str
+    mes_topic: str
     priority: int = 0
 
     def matches(self, topic: str) -> bool:
@@ -27,7 +27,7 @@ class Subscription:
         Проверяет, соответствует ли тема сообщению заданной теме подписки
         с поддержкой wildcard (* в теме).
         """
-        return fnmatch(topic, self.mes_type)
+        return fnmatch(topic, self.mes_topic)
 
 
 class MessageBus:
@@ -59,13 +59,13 @@ class MessageBus:
 
     def subscribe(
         self,
-        mes_type: str,
+        mes_topic: str,
         handler: Callable[[Message], Coroutine[Any, Any, None]],
         priority: int = 0,
     ) -> Subscription:
         """Добавить обработчик на сообщения с заданной темой."""
         sub = Subscription(
-            mes_type=mes_type,
+            mes_topic=mes_topic,
             handler=handler,
             priority=priority,
         )
@@ -73,13 +73,22 @@ class MessageBus:
         self._subscriptions.sort(key=lambda s: s.priority, reverse=True)
         logger.debug(
             "Added subscriber on topic '%s', priority=%d",
-            mes_type, priority
+            mes_topic, priority
         )
         return sub
 
     def unsubscribe(self, subscription: Subscription) -> None:
         """Удалить обработчик сообщений с заданной темой."""
-        self._subscriptions.remove(subscription)
+        try:
+            self._subscriptions.remove(subscription)
+        except ValueError:
+            pass
+
+    def unsubscribe_from(self, topic: str) -> None:
+        """Удалить все обработчики сообщений для заданной темы."""
+        for sub in self._subscriptions:
+            if sub.matches(topic):
+                self._subscriptions.remove(sub)
 
     async def publish(self, mes_type: str, message: Message) -> None:
         """Поместить сообщение в очередь."""

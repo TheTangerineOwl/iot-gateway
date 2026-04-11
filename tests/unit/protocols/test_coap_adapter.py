@@ -26,14 +26,19 @@ async def adapter(running_bus: MessageBus, registry: DeviceRegistry):
 
 
 def make_adapter(
-    bus: AsyncMock | None = None,
+    bus: MagicMock | None = None,
     registry: MagicMock | None = None
 ):
     """Создать CoAPAdapter с подключённой mock-шиной."""
     adapter = CoAPAdapter()
-    mock_bus = bus or AsyncMock()
+    if bus is None:
+        mock_bus = MagicMock()
+        mock_bus.publish = AsyncMock()
+        mock_bus.subscribe = MagicMock(return_value=MagicMock())
+        mock_bus.unsubscribe = MagicMock()
+        bus = mock_bus
     mock_registry = registry or MagicMock()
-    adapter.set_gateway_context(mock_bus, mock_registry)
+    adapter.set_gateway_context(bus, mock_registry)
     return adapter
 
 
@@ -210,8 +215,8 @@ class TestIngestResource:
     @pytest.mark.asyncio
     async def test_valid_telemetry_publishes_to_bus(self):
         """Корректное сообщение попадает на шину."""
-        mock_bus = AsyncMock()
-        adapter = make_adapter(mock_bus)
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         resource = _IngestResource(adapter)
 
         request = _coap_request(
@@ -228,8 +233,8 @@ class TestIngestResource:
     @pytest.mark.asyncio
     async def test_telemetry_message_protocol_set(self):
         """В сообщение добавляется информация о протоколе."""
-        mock_bus = AsyncMock()
-        adapter = make_adapter(mock_bus)
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         resource = _IngestResource(adapter)
 
         request = _coap_request(
@@ -295,9 +300,9 @@ class TestIngestResource:
     @pytest.mark.asyncio
     async def test_publish_error_returns_internal_server_error(self):
         """Ошибки на шине оглашаются INTERNAL_SERVER_ERROR."""
-        mock_bus = AsyncMock()
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         mock_bus.publish.side_effect = RuntimeError("bus is down")
-        adapter = make_adapter(mock_bus)
         resource = _IngestResource(adapter)
 
         request = _coap_request(_json_payload({"device_id": "dev-1"}))
@@ -322,8 +327,8 @@ class TestIngestResource:
         self, registry: DeviceRegistry
     ):
         """Если в теле нет ключа 'payload', весь body становится payload."""
-        mock_bus = AsyncMock()
-        adapter = make_adapter(mock_bus)
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         resource = _IngestResource(adapter)
 
         body = {"device_id": "dev-flat", "temperature": 36.6}
@@ -369,8 +374,8 @@ class TestRegisterResource:
     @pytest.mark.asyncio
     async def test_valid_register_publishes_to_bus(self):
         """Корректное сообщение регистрации попадает на шину."""
-        mock_bus = AsyncMock()
-        adapter = make_adapter(mock_bus)
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         resource = _RegisterResource(adapter)
 
         request = _coap_request(_json_payload({"device_id": "dev-55"}))
@@ -385,8 +390,8 @@ class TestRegisterResource:
     @pytest.mark.asyncio
     async def test_register_message_topic_matches_device(self):
         """Топик сообщения регистрации device.register.{device_id}."""
-        mock_bus = AsyncMock()
-        adapter = make_adapter(mock_bus)
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         resource = _RegisterResource(adapter)
 
         request = _coap_request(_json_payload({"device_id": "dev-topic"}))
@@ -398,8 +403,8 @@ class TestRegisterResource:
     @pytest.mark.asyncio
     async def test_register_message_protocol_set(self):
         """В корректное сообщение задается имя протокоал."""
-        mock_bus = AsyncMock()
-        adapter = make_adapter(mock_bus)
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         resource = _RegisterResource(adapter)
 
         request = _coap_request(_json_payload({"device_id": "dev-proto"}))
@@ -411,8 +416,8 @@ class TestRegisterResource:
     @pytest.mark.asyncio
     async def test_register_payload_contains_full_body(self):
         """Тело запроса сохраняется."""
-        mock_bus = AsyncMock()
-        adapter = make_adapter(mock_bus)
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         resource = _RegisterResource(adapter)
 
         body = {
@@ -441,9 +446,9 @@ class TestRegisterResource:
     @pytest.mark.asyncio
     async def test_publish_error_returns_internal_server_error(self):
         """На ошибки шины вернется INTERNAL_SERVER_ERROR."""
-        mock_bus = AsyncMock()
+        adapter = make_adapter()
+        mock_bus = adapter._bus
         mock_bus.publish.side_effect = RuntimeError("bus offline")
-        adapter = make_adapter(mock_bus)
         resource = _RegisterResource(adapter)
 
         request = _coap_request(_json_payload({"device_id": "dev-err"}))
