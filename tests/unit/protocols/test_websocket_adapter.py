@@ -157,7 +157,7 @@ class TestWsTelemetry:
             client,
             url_telemetry,
             [{
-                "type": "telemetry",
+                "message_type": "telemetry",
                 "device_id": "dev-1",
                 "payload": {"temp": 22.0}
             }],
@@ -172,7 +172,11 @@ class TestWsTelemetry:
         responses = await _ws_exchange(
             client,
             url_telemetry,
-            [{"type": "telemetry", "device_id": "dev-1", "payload": {}}],
+            [{
+                "message_type": "telemetry",
+                "device_id": "dev-1",
+                "payload": {}
+            }],
         )
         assert "message_id" in responses[0]
 
@@ -193,7 +197,7 @@ class TestWsTelemetry:
             client,
             url_telemetry,
             [{
-                "type": "telemetry",
+                "message_type": "telemetry",
                 "device_id": "ws-dev-1",
                 "payload": {"v": 7}
             }],
@@ -220,7 +224,11 @@ class TestWsTelemetry:
         await _ws_exchange(
             client,
             url_telemetry,
-            [{"type": "telemetry", "device_id": "topic-dev", "payload": {}}],
+            [{
+                "message_type": "telemetry",
+                "device_id": "topic-dev",
+                "payload": {}
+            }],
         )
         await asyncio.sleep(0.05)
 
@@ -261,7 +269,7 @@ class TestWsHeartbeat:
         responses = await _ws_exchange(
             client,
             url_telemetry,
-            [{"type": "heartbeat", "device_id": "dev-hb"}],
+            [{"message_type": "heartbeat", "device_id": "dev-hb"}],
         )
         assert responses[0]["status"] == "ok"
 
@@ -281,7 +289,7 @@ class TestWsHeartbeat:
         await _ws_exchange(
             client,
             url_telemetry,
-            [{"type": "heartbeat", "device_id": "dev-hb-2"}],
+            [{"message_type": "heartbeat", "device_id": "dev-hb-2"}],
         )
         await asyncio.sleep(0.05)
 
@@ -305,7 +313,7 @@ class TestWsHeartbeat:
         await _ws_exchange(
             client,
             url_telemetry,
-            [{"type": "heartbeat", "device_id": "hb-topic"}],
+            [{"message_type": "heartbeat", "device_id": "hb-topic"}],
         )
         await asyncio.sleep(0.05)
 
@@ -324,7 +332,7 @@ class TestWsRegister:
             client,
             url_register,
             [{
-                "type": "register",
+                "message_type": "register",
                 "device_id": "dev-reg",
                 "payload": {"name": "X"}
             }],
@@ -347,7 +355,11 @@ class TestWsRegister:
         await _ws_exchange(
             client,
             url_register,
-            [{"type": "register", "device_id": "dev-reg-2", "payload": {}}],
+            [{
+                "message_type": "register",
+                "device_id": "dev-reg-2",
+                "payload": {}
+            }],
         )
         await asyncio.sleep(0.05)
 
@@ -372,7 +384,9 @@ class TestWsRegister:
             client,
             url_register,
             [{
-                "type": "register", "device_id": "dev-topic-reg", "payload": {}
+                "message_type": "register",
+                "device_id": "dev-topic-reg",
+                "payload": {}
             }],
         )
         await asyncio.sleep(0.05)
@@ -391,7 +405,8 @@ class TestWsErrors:
         async with client.ws_connect(url_telemetry) as ws:
             await ws.send_str("this is not json{{{")
             resp = await asyncio.wait_for(ws.receive_json(), timeout=2.0)
-        assert "error" in resp
+        assert resp.get('status', '') == 'error'
+        assert resp.get('error_code', '') == 'INVALID_JSON'
 
     @pytest.mark.unit
     async def test_missing_device_id_returns_error(
@@ -399,9 +414,13 @@ class TestWsErrors:
     ):
         """Пропущенный device_id вызовет ошибку."""
         async with client.ws_connect(url_telemetry) as ws:
-            await ws.send_str(json.dumps({"type": "telemetry", "payload": {}}))
+            await ws.send_str(json.dumps({
+                "message_type": "telemetry",
+                "payload": {}
+            }))
             resp = await asyncio.wait_for(ws.receive_json(), timeout=2.0)
-        assert "error" in resp
+        assert resp.get('status', '') == 'error'
+        assert resp.get('error_code', '') == 'MISSING_DEVICE_ID'
 
     @pytest.mark.unit
     async def test_unknown_message_type_returns_error(
@@ -411,9 +430,10 @@ class TestWsErrors:
         responses = await _ws_exchange(
             client,
             url_telemetry,
-            [{"type": "unknown_type", "device_id": "dev-1"}],
+            [{"message_type": "unknown_type", "device_id": "dev-1"}],
         )
-        assert "error" in responses[0]
+        assert responses[0].get('status', '') == 'error'
+        assert responses[0].get('error_code', '') == 'UNKNOWN_TYPE'
 
     @pytest.mark.unit
     async def test_invalid_json_error_message_text(
@@ -423,7 +443,8 @@ class TestWsErrors:
         async with client.ws_connect(url_telemetry) as ws:
             await ws.send_str("<<<bad>>>")
             resp = await asyncio.wait_for(ws.receive_json(), timeout=2.0)
-        assert resp["error"] == "Invalid JSON"
+        assert resp.get('status', '') == 'error'
+        assert resp.get('error_code', '') == 'INVALID_JSON'
 
     @pytest.mark.unit
     async def test_missing_device_id_error_message_text(
@@ -431,9 +452,10 @@ class TestWsErrors:
     ):
         """Сообщение о пропущенном id содержит информацию."""
         async with client.ws_connect(url_telemetry) as ws:
-            await ws.send_str(json.dumps({"type": "telemetry"}))
+            await ws.send_str(json.dumps({"message_type": "telemetry"}))
             resp = await asyncio.wait_for(ws.receive_json(), timeout=2.0)
-        assert resp["error"] == "device_id required"
+        assert resp.get('status', '') == 'error'
+        assert resp.get('error_code', '') == 'MISSING_DEVICE_ID'
 
 
 class TestWsConnections:
@@ -447,7 +469,9 @@ class TestWsConnections:
         async with client.ws_connect(adapter._url_ws_telemetry) as ws:
             await ws.send_str(
                 json.dumps({
-                    "type": "telemetry", "device_id": "conn-dev", "payload": {}
+                    "message_type": "telemetry",
+                    "device_id": "conn-dev",
+                    "payload": {}
                 })
             )
             await asyncio.wait_for(ws.receive_json(), timeout=2.0)
@@ -461,7 +485,7 @@ class TestWsConnections:
         async with client.ws_connect(adapter._url_ws_telemetry) as ws:
             await ws.send_str(
                 json.dumps({
-                    "type": "telemetry",
+                    "message_type": "telemetry",
                     "device_id": "close-dev",
                     "payload": {}
                 })
@@ -479,7 +503,10 @@ class TestWsConnections:
         async with client.ws_connect(adapter._url_ws_telemetry) as ws:
             for i in range(3):
                 await ws.send_str(
-                    json.dumps({"type": "heartbeat", "device_id": "multi-dev"})
+                    json.dumps({
+                        "message_type": "heartbeat",
+                        "device_id": "multi-dev"
+                    })
                 )
                 await asyncio.wait_for(ws.receive_json(), timeout=2.0)
 
@@ -536,7 +563,8 @@ class TestHttpRegister:
             headers={"Content-Type": "application/json"},
         )
         data = await resp.json()
-        assert "error" in data
+        assert data.get('status', '') == 'error'
+        assert data.get('error_code', '') == 'INVALID_JSON'
 
     @pytest.mark.unit
     async def test_publishes_registration_to_bus(
@@ -636,7 +664,7 @@ class TestHttpHealth:
         async with client.ws_connect(adapter._url_ws_telemetry) as ws:
             await ws.send_str(
                 json.dumps({
-                    "type": "heartbeat",
+                    "message_type": "heartbeat",
                     "device_id": "health-count-dev"
                 })
             )

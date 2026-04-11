@@ -7,8 +7,9 @@ import json
 import logging
 from typenv import Env
 from typing import Any
-from models.message import Message, MessageType
+from models.message import MessageType
 from protocols.adapter import ProtocolAdapter
+from .message_builder import MessageBuilder
 
 
 env = Env(upper=True)
@@ -30,7 +31,9 @@ class _IngestResource(resource.Resource):
             logger.warning('CoAP ingest: bad payload — %s', exc)
             return aiocoap.Message(
                 code=aiocoap.BAD_REQUEST,
-                payload=json.dumps({'error': 'Invalid JSON'}).encode(),
+                payload=json.dumps(
+                    MessageBuilder.err_inval_json()
+                ).encode(),
                 content_format=ContentFormat.JSON,
             )
 
@@ -38,16 +41,17 @@ class _IngestResource(resource.Resource):
         if not device_id:
             return aiocoap.Message(
                 code=aiocoap.BAD_REQUEST,
-                payload=json.dumps({'error': 'device_id required'}).encode(),
+                payload=json.dumps(
+                    MessageBuilder.err_miss_dev_id()
+                ).encode(),
                 content_format=ContentFormat.JSON,
             )
 
-        message = Message(
-            message_type=MessageType.TELEMETRY,
-            device_id=device_id,
-            protocol=self._adapter.protocol_name.lower(),
-            message_topic=self._adapter.url_ingest,
-            payload=body.get('payload', body),
+        message = MessageBuilder.normalize(
+            body,
+            protocol_name=self._adapter.protocol_name,
+            topic=self._adapter.url_ingest,
+            message_type=MessageType.TELEMETRY
         )
 
         try:
@@ -58,7 +62,9 @@ class _IngestResource(resource.Resource):
             logger.error('CoAP ingest: publish error — %s', exc)
             return aiocoap.Message(
                 code=aiocoap.INTERNAL_SERVER_ERROR,
-                payload=json.dumps({'error': str(exc)}).encode(),
+                payload=json.dumps(
+                    MessageBuilder.err_internal(str(exc))
+                ).encode(),
                 content_format=ContentFormat.JSON,
             )
 
@@ -67,7 +73,7 @@ class _IngestResource(resource.Resource):
         return aiocoap.Message(
             code=aiocoap.CHANGED,
             payload=json.dumps(
-                {'status': 'accepted', 'message_id': message.message_id}
+                MessageBuilder.build_msg(message, 'changed')
             ).encode(),
             content_format=ContentFormat.JSON,
         )
@@ -88,16 +94,17 @@ class _RegisterResource(resource.Resource):
             logger.warning('CoAP register: bad payload — %s', exc)
             return aiocoap.Message(
                 code=aiocoap.BAD_REQUEST,
-                payload=json.dumps({'error': 'Invalid JSON'}).encode(),
+                payload=json.dumps(
+                    MessageBuilder.err_inval_json()
+                ).encode(),
                 content_format=ContentFormat.JSON,
             )
 
-        message = Message(
-            message_type=MessageType.REGISTRATION,
-            device_id=body.get('device_id', ""),
-            protocol=self._adapter.protocol_name.lower(),
-            message_topic=self._adapter.url_register,
-            payload=body,
+        message = MessageBuilder.normalize(
+            body,
+            protocol_name=self._adapter.protocol_name,
+            topic=self._adapter.url_register,
+            message_type=MessageType.REGISTRATION
         )
         message.message_topic = f'device.register.{message.device_id}'
 
@@ -109,7 +116,9 @@ class _RegisterResource(resource.Resource):
             logger.error('CoAP register: publish error — %s', exc)
             return aiocoap.Message(
                 code=aiocoap.INTERNAL_SERVER_ERROR,
-                payload=json.dumps({'error': str(exc)}).encode(),
+                payload=json.dumps(
+                    MessageBuilder.err_internal(str(exc))
+                ).encode(),
                 content_format=ContentFormat.JSON,
             )
 
@@ -117,7 +126,9 @@ class _RegisterResource(resource.Resource):
 
         return aiocoap.Message(
             code=aiocoap.CREATED,
-            payload=json.dumps({'status': 'registered'}).encode(),
+            payload=json.dumps(
+                MessageBuilder.build_msg(message, status='registered')
+            ).encode(),
             content_format=ContentFormat.JSON,
         )
 
@@ -152,15 +163,15 @@ class CoAPAdapter(ProtocolAdapter):
         self._host: str = env.str('COAP_HOST', default='0.0.0.0')
         self._port: int = env.int('COAP_PORT', default=5683)
 
-        root_url: str = env.str('COAP_URL_ROOT', default='api/v1/coap')
+        self._root_url: str = env.str('COAP_URL_ROOT', default='/api/v1/coap')
 
-        self._url_ingest: str = root_url + env.str(
+        self._url_ingest: str = self._root_url + env.str(
             'COAP_URL_TELEMETRY', default='/ingest'
         )
-        self._url_register: str = root_url + env.str(
+        self._url_register: str = self._root_url + env.str(
             'COAP_URL_REGISTER', default='/devices/register'
         )
-        self._url_health: str = root_url + env.str(
+        self._url_health: str = self._root_url + env.str(
             'COAP_URL_HEALTH', default='/health'
         )
 
@@ -217,9 +228,10 @@ class CoAPAdapter(ProtocolAdapter):
 
         self._running = True
         logger.info(
-            'CoAP adapter listening on coap://%s:%d',
-            self._host,
-            self._port,
+            'CoAP adapter listening on %s:%s  (coap://%s:%d%s)',
+            self._host, self._port,
+            self._host, self._port,
+            self._root_url
         )
 
     async def stop(self) -> None:

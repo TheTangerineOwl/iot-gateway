@@ -163,7 +163,8 @@ class TestHandleIngest:
             json={'payload': {'temp': 23.5}},
         )
         data = await resp.json()
-        assert 'error' in data
+        assert data.get('status', '') == 'error'
+        assert data.get('error_code', 'no_code') == 'MISSING_DEVICE_ID'
 
     @pytest.mark.unit
     async def test_invalid_json_returns_400(
@@ -312,7 +313,7 @@ class TestHandleRegister:
         assert received[0].message_topic == 'device.register.dev-topic-test'
 
     @pytest.mark.unit
-    async def test_register_without_device_id_still_returns_201(
+    async def test_register_without_device_id(
         self, client: TestClient, url_register
     ):
         """Адаптер не проверяет наличие device_id при регистрации."""
@@ -320,7 +321,8 @@ class TestHandleRegister:
             url_register,
             json={'name': 'Anonymous'},
         )
-        assert resp.status == HTTPStatus.CREATED
+        # assert resp.status == HTTPStatus.CREATED
+        assert resp.status == HTTPStatus.BAD_REQUEST
 
 
 class TestHandleHealth:

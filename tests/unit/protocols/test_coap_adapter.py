@@ -203,7 +203,7 @@ class TestIngestResource:
         response = await resource.render_post(request)
 
         body = _parse_response(response)
-        assert body["status"] == "accepted"
+        assert body["status"] == "changed"
         assert "message_id" in body
 
     @pytest.mark.asyncio
@@ -251,7 +251,7 @@ class TestIngestResource:
 
         assert response.code == aiocoap.BAD_REQUEST
         body = _parse_response(response)
-        assert "error" in body
+        assert body['status'] == 'error'
 
     @pytest.mark.asyncio
     async def test_empty_device_id_returns_bad_request(
@@ -277,7 +277,7 @@ class TestIngestResource:
 
         assert response.code == aiocoap.BAD_REQUEST
         body = _parse_response(response)
-        assert "error" in body
+        assert body.get('status', '') == 'error'
 
     @pytest.mark.asyncio
     async def test_non_utf8_payload_returns_bad_request(
@@ -331,7 +331,7 @@ class TestIngestResource:
 
         assert response.code == aiocoap.CHANGED
         _, msg = mock_bus.publish.call_args.args
-        assert msg.payload == body
+        assert msg.payload == {'temperature': 36.6}
 
 
 @pytest.mark.unit

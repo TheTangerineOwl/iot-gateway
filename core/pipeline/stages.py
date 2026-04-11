@@ -25,7 +25,7 @@ class ValidationStage(PipelineStage):
             return None
         if not message.payload:
             logger.info(
-                "Message discarded: empty payload from %d", message.device_id
+                "Message discarded: empty payload from %s", message.device_id
             )
             return None
         return message

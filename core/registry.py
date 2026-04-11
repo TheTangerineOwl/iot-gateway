@@ -43,13 +43,12 @@ class DeviceRegistry:
             is_new = device.device_id not in self._devices
             device.touch()
             self._devices[device.device_id] = device
-
             if is_new:
                 logger.info(
                     "Device registered: %s "
                     "(%s, protocol %s)",
                     device.device_id,
-                    device.name, device.protocol
+                    device.name, device.protocol.value
                 )
                 for cb in self._on_register_callbacks:
                     await cb(device)

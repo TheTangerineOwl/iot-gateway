@@ -13,8 +13,9 @@ import json
 import logging
 from typenv import Env
 from typing import Any
-from models.message import Message, MessageType
+from models.message import MessageType
 from protocols.adapter import ProtocolAdapter
+from .message_builder import MessageBuilder
 
 
 env = Env(upper=True)
@@ -51,6 +52,21 @@ class HTTPAdapter(ProtocolAdapter):
         """Имя протокола у адаптера."""
         return "HTTP"
 
+    def _build_meta(self, request: web.Request):
+        return {
+            'method': request.method,
+            'path': request.path,
+            'remote_addr': request.remote,
+            'headers': {
+                k.lower(): v
+                for k, v in request.headers.items()
+                if k.lower() in (
+                    'content-type', 'x-device-token',
+                    'user-agent', 'x-correlation-id'
+                )
+            }
+        }
+
     async def start(self) -> None:
         """Запустить HTTP-сервера."""
         self._app = web.Application()
@@ -75,8 +91,10 @@ class HTTPAdapter(ProtocolAdapter):
 
         self._running = True
         logger.info(
-            "HTTP adapter listening on %s:%d",
-            self._host, self._port
+            "HTTP adapter listening on %s:%d  (http://%s:%d%s)",
+            self._host, self._port,
+            self._host, self._port,
+            self._root_url
         )
 
     async def stop(self) -> None:
@@ -92,33 +110,31 @@ class HTTPAdapter(ProtocolAdapter):
             body = await request.json()
         except json.JSONDecodeError:
             return web.json_response(
-                {"error": "Invalid JSON"},
+                MessageBuilder.err_inval_json(),
                 status=HTTPStatus.BAD_REQUEST
             )
 
-        device_id = body.get("device_id")
-        if not device_id:
-            return web.json_response(
-                {"error": "device_id required"},
-                status=HTTPStatus.BAD_REQUEST
-            )
+        proto_meta = self._build_meta(request)
 
-        message = Message(
-            message_type=MessageType.TELEMETRY,
-            device_id=device_id,
-            protocol="http",
-            message_topic=self._wh_telemetry,
-            payload=body.get("payload", body),
+        message = MessageBuilder.normalize(
+            body,
+            protocol_name=self.protocol_name,
+            topic=self._wh_telemetry,
+            proto_meta=proto_meta
         )
 
-        await self._publish_message(f"telemetry.{device_id}", message)
+        if not message.device_id:
+            return web.json_response(
+                MessageBuilder.err_miss_dev_id(),
+                status=HTTPStatus.BAD_REQUEST
+            )
+
+        await self._publish_message(f"telemetry.{message.device_id}", message)
 
         logger.log(5, 'HTTP adapter got telemetry: %s', message.to_dict())
 
-        return web.json_response({
-            "status": "accepted",
-            "message_id": message.message_id,
-            },
+        return web.json_response(
+            MessageBuilder.build_msg(message, 'accepted'),
             status=HTTPStatus.ACCEPTED
         )
 
@@ -128,17 +144,26 @@ class HTTPAdapter(ProtocolAdapter):
             body = await request.json()
         except json.JSONDecodeError:
             return web.json_response(
-                {"error": "Invalid JSON"},
+                MessageBuilder.err_inval_json(),
                 status=HTTPStatus.BAD_REQUEST
             )
 
-        message = Message(
-            message_type=MessageType.REGISTRATION,
-            device_id=body.get("device_id", ""),
-            protocol="http",
-            message_topic=self._url_register,
-            payload=body,
+        proto_meta = self._build_meta(request)
+
+        message = MessageBuilder.normalize(
+            body,
+            protocol_name=self.protocol_name,
+            topic=self._url_register,
+            proto_meta=proto_meta,
+            message_type=MessageType.REGISTRATION
         )
+
+        if not message.device_id:
+            return web.json_response(
+                MessageBuilder.err_miss_dev_id(),
+                status=HTTPStatus.BAD_REQUEST
+            )
+
         message.message_topic = f"device.register.{message.device_id}"
         await self._publish_message(
             f"device.register.{message.device_id}",
@@ -148,7 +173,7 @@ class HTTPAdapter(ProtocolAdapter):
         logger.log(5, 'HTTP adapter got register: %s', message.to_dict())
 
         return web.json_response(
-            {"status": "registered"},
+            MessageBuilder.build_msg(message, 'registered'),
             status=HTTPStatus.CREATED
         )
 

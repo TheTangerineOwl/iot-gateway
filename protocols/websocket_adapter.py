@@ -14,8 +14,9 @@ import logging
 from http import HTTPStatus
 from typenv import Env
 from typing import Any
-from models.message import Message, MessageType
+from models.message import MessageType
 from protocols.adapter import ProtocolAdapter
+from .message_builder import MessageBuilder, CommonErrMsg
 
 
 env = Env(upper=True)
@@ -53,6 +54,21 @@ class WebSocketAdapter(ProtocolAdapter):
     def protocol_name(self) -> str:
         """Имя протокола у адаптера."""
         return 'WebSocket'
+
+    def _build_meta(self, request: web.Request):
+        return {
+            'method': request.method,
+            'path': request.path,
+            'remote_addr': request.remote,
+            'headers': {
+                k.lower(): v
+                for k, v in request.headers.items()
+                if k.lower() in (
+                    'content-type', 'x-device-token',
+                    'user-agent', 'x-correlation-id'
+                )
+            }
+        }
 
     async def start(self) -> None:
         """Запустить WebSocket-сервер."""
@@ -135,7 +151,7 @@ class WebSocketAdapter(ProtocolAdapter):
             async for msg in ws:
                 if msg.type == WSMsgType.TEXT:
                     device_id = await self._dispatch_text(
-                        ws, msg.data, device_id, request.remote
+                        ws, msg.data, device_id, self._build_meta(request)
                     )
 
                 elif msg.type == WSMsgType.ERROR:
@@ -164,16 +180,16 @@ class WebSocketAdapter(ProtocolAdapter):
             body: dict[str, Any] = await request.json()
         except (json.JSONDecodeError, Exception):
             return web.json_response(
-                {'error': 'Invalid JSON'},
+                MessageBuilder.err_inval_json(),
                 status=HTTPStatus.BAD_REQUEST,
             )
 
-        message = Message(
-            message_type=MessageType.REGISTRATION,
-            device_id=body.get('device_id', ''),
-            protocol=self.protocol_name.lower(),
-            message_topic=self._url_register,
-            payload=body,
+        message = MessageBuilder.normalize(
+            body,
+            protocol_name=self.protocol_name,
+            proto_meta=self._build_meta(request),
+            topic=self._url_register,
+            message_type=MessageType.REGISTRATION
         )
         message.message_topic = f'device.register.{message.device_id}'
         await self._publish_message(
@@ -183,7 +199,9 @@ class WebSocketAdapter(ProtocolAdapter):
         logger.log(5, 'WebSocket HTTP-register: %s', message.to_dict())
 
         return web.json_response(
-            {'status': 'registered'},
+            MessageBuilder.build_msg(
+                message, 'registered'
+            ),
             status=HTTPStatus.CREATED,
         )
 
@@ -199,7 +217,7 @@ class WebSocketAdapter(ProtocolAdapter):
         ws: web.WebSocketResponse,
         raw: str,
         device_id: str | None,
-        remote: str | None,
+        meta: dict[str, Any]
     ) -> str | None:
         """
         Разобрать текстовое WebSocket-сообщение и направить его в шину.
@@ -209,40 +227,52 @@ class WebSocketAdapter(ProtocolAdapter):
         try:
             body: dict[str, Any] = json.loads(raw)
         except json.JSONDecodeError:
-            await self._send_error(ws, 'Invalid JSON')
+            await self._send_error(
+                ws,
+                error=CommonErrMsg.INVALID_JSON.value,
+                error_code=CommonErrMsg.INVALID_JSON.name
+            )
             return device_id
 
-        msg_type = body.get('type', 'telemetry')
+        msg_type = body.get('message_type', 'telemetry')
         incoming_id = body.get('device_id', device_id or '')
 
         if not incoming_id:
-            await self._send_error(ws, 'device_id required')
+            await self._send_error(
+                ws,
+                error=CommonErrMsg.MISSING_DEVICE_ID.value,
+                error_code=CommonErrMsg.MISSING_DEVICE_ID.name
+            )
             return device_id
 
         if device_id != incoming_id:
             device_id = incoming_id
             if device_id is None:  # для Mypy
-                await self._send_error(ws, 'device_id required')
+                await self._send_error(
+                    ws,
+                    error=CommonErrMsg.MISSING_DEVICE_ID.value,
+                    error_code=CommonErrMsg.MISSING_DEVICE_ID.name
+                )
                 return device_id
             self._connections[device_id] = ws
             logger.debug(
                 "WebSocket device identified: '%s' (%s)",
                 device_id,
-                remote,
+                meta.get('remote_addr', ''),
             )
 
         if msg_type == 'telemetry':
-            await self._process_telemetry(ws, body, device_id)
+            await self._process_telemetry(ws, body, meta, device_id)
 
         elif msg_type == 'heartbeat':
-            await self._process_heartbeat(ws, device_id)
+            await self._process_heartbeat(ws, body, meta, device_id)
 
         elif msg_type == 'register':
-            await self._process_ws_register(ws, body, device_id)
+            await self._process_ws_register(ws, body, meta, device_id)
 
         else:
             await self._send_error(
-                ws, f"Unknown message type: '{msg_type}'"
+                ws, f"Unknown message type: '{msg_type}'", 'UNKNOWN_TYPE'
             )
 
         return device_id
@@ -251,39 +281,41 @@ class WebSocketAdapter(ProtocolAdapter):
         self,
         ws: web.WebSocketResponse,
         body: dict[str, Any],
+        meta: dict[str, Any],
         device_id: str,
     ) -> None:
         """Обработать телеметрию, пришедшую по WebSocket."""
-        message = Message(
+        message = MessageBuilder.normalize(
             message_type=MessageType.TELEMETRY,
-            device_id=device_id,
-            protocol=self.protocol_name.lower(),
-            message_topic=f'telemetry.{device_id}',
-            payload=body.get('payload', body),
+            body=body,
+            protocol_name=self.protocol_name,
+            proto_meta=meta,
+            topic=f'telemetry.{device_id}'
         )
         await self._publish_message(f'telemetry.{device_id}', message)
 
         logger.log(5, 'WebSocket telemetry: %s', message.to_dict())
 
         await ws.send_json(
-            {
-                'status': 'accepted',
-                'message_id': message.message_id,
-            }
+            MessageBuilder.build_msg(
+                message=message, status='accepted'
+            )
         )
 
     async def _process_heartbeat(
         self,
         ws: web.WebSocketResponse,
+        body: dict[str, Any],
+        meta: dict[str, Any],
         device_id: str,
     ) -> None:
         """Обработать heartbeat-сообщение по WebSocket."""
-        message = Message(
-            message_type=MessageType.HEARTBEAT,
-            device_id=device_id,
-            protocol=self.protocol_name.lower(),
-            message_topic=f'device.heartbeat.{device_id}',
-            payload={},
+        message = MessageBuilder.normalize(
+            body,
+            protocol_name=self.protocol_name,
+            proto_meta=meta,
+            topic=f'device.heartbeat.{device_id}',
+            message_type=MessageType.HEARTBEAT
         )
         await self._publish_message(
             f'device.heartbeat.{device_id}', message
@@ -291,21 +323,24 @@ class WebSocketAdapter(ProtocolAdapter):
 
         logger.log(5, "WebSocket heartbeat from device '%s'", device_id)
 
-        await ws.send_json({'status': 'ok'})
+        await ws.send_json(
+            MessageBuilder.build_msg(status='ok')
+        )
 
     async def _process_ws_register(
         self,
         ws: web.WebSocketResponse,
         body: dict[str, Any],
+        meta: dict[str, Any],
         device_id: str,
     ) -> None:
         """Обработать регистрацию устройства, пришедшую по WebSocket."""
-        message = Message(
+        message = MessageBuilder.normalize(
+            body,
+            protocol_name=self.protocol_name,
+            proto_meta=meta,
             message_type=MessageType.REGISTRATION,
-            device_id=device_id,
-            protocol=self.protocol_name.lower(),
-            message_topic=f'device.register.{device_id}',
-            payload=body.get('payload', body),
+            topic=f'device.register.{device_id}'
         )
         await self._publish_message(
             f'device.register.{device_id}', message
@@ -313,14 +348,19 @@ class WebSocketAdapter(ProtocolAdapter):
 
         logger.log(5, 'WebSocket register: %s', message.to_dict())
 
-        await ws.send_json({'status': 'registered'})
+        await ws.send_json(
+            MessageBuilder.build_msg(message, 'registered')
+        )
 
     async def _send_error(
-        self, ws: web.WebSocketResponse, error: str
+        self, ws: web.WebSocketResponse,
+        error: str, error_code: str
     ) -> None:
         """Отправить сообщение об ошибке клиенту."""
         try:
-            await ws.send_json({'error': error})
+            await ws.send_json(
+                MessageBuilder.err_from_str(error_code, error_msg=error)
+            )
         except Exception as exc:
             logger.warning('Failed to send error to client: %s', exc)
 
