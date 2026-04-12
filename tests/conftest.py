@@ -7,6 +7,7 @@ import psycopg
 from unittest.mock import AsyncMock
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
+from core.pipeline.pipeline import Pipeline
 from models.device import DeviceStatus, DeviceType, Device, ProtocolType
 from models.message import Message, MessageType
 
@@ -146,3 +147,9 @@ def mock_storage():
     storage.setup = AsyncMock()
     storage.teardown = AsyncMock()
     return storage
+
+
+@pytest.fixture
+def pipeline():
+    """Тестовый конвейер."""
+    return Pipeline()
