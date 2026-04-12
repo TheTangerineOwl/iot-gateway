@@ -1,27 +1,12 @@
 """Тест модуля шины сообщений."""
-from contextlib import contextmanager
 import pytest
 import asyncio
 from unittest.mock import AsyncMock
 from core.message_bus import MessageBus
 from models.message import Message
-from tests.conftest import BUS_DISPATCH_WAIT, BUS_MAX_QUEUE
-
-
-@contextmanager
-def not_raises(exception: type[Exception]):
-    """Проваливает тест в случае указанного исключения."""
-    try:
-        yield
-    except exception as exc:
-        raise pytest.fail(
-            'DID RAISE {0}: {1}'.format(exception, exc)
-        )
-
-
-def telemetry_topic(topic: str = '*'):
-    """Возвращает строку топика телеметрии с суффиксом."""
-    return f'telemetry.{topic}'
+from tests.conftest import (
+    not_raises, telemetry_topic, BUS_DISPATCH_WAIT, BUS_MAX_QUEUE
+)
 
 
 async def drain(bus: MessageBus) -> None:

@@ -1,4 +1,5 @@
 """Общие фикстуры для всех модулей."""
+from contextlib import contextmanager
 import logging
 import pytest
 import pytest_asyncio
@@ -27,6 +28,27 @@ DEVICE_ID_DEFAULT = "dev-001"
 DEVICE_ID_ONLINE = "dev-online"
 DEVICE_NAME = "Thermometer"
 DEVICE_DEF_PAYLOAD = {"temp": 42.0}
+
+
+@contextmanager
+def not_raises(exception: type[Exception]):
+    """Проваливает тест в случае указанного исключения."""
+    try:
+        yield
+    except exception as exc:
+        raise pytest.fail(
+            'DID RAISE {0}: {1}'.format(exception, exc)
+        )
+
+
+def register_topic(topic: str = '*'):
+    """Возвращает строку топика регистрации с суффиксом."""
+    return f'device.register.{topic}'
+
+
+def telemetry_topic(topic: str = '*'):
+    """Возвращает строку топика телеметрии с суффиксом."""
+    return f'telemetry.{topic}'
 
 
 @pytest.fixture(autouse=True, scope='session')
