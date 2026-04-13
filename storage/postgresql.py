@@ -1,13 +1,14 @@
 """Хранилище телеметрии на базе PostgreSQL."""
+import asyncio
 from contextlib import contextmanager
 import psycopg
 from psycopg.connection_async import AsyncConnection
 from psycopg.rows import dict_row
-
 import json
 import logging
 from typing import Any
 from storage.base import StorageBase
+from models.device import ProtocolType
 from models.telemetry import TelemetryRecord
 
 
@@ -106,6 +107,7 @@ class PostgresStorage(StorageBase):
         await self._conn.close()
         self._conn = None
         logger.info("PostgresStorage closed")
+        await asyncio.sleep(0)
 
     async def save(self, record: TelemetryRecord) -> None:
         """Сохранить запись телеметрии."""
@@ -136,14 +138,14 @@ class PostgresStorage(StorageBase):
             raise psycopg.DatabaseError('Connection not established')
         async with self._conn.cursor() as cur:
             await cur.execute(sql, (device_id, limit))
-            await self._conn.commit()
+            # await self._conn.commit()
             rows = await cur.fetchall()
 
         return [
             TelemetryRecord(
                 message_id=row['message_id'],
                 device_id=row['device_id'],
-                protocol=row['protocol'],
+                protocol=ProtocolType(row['protocol']),
                 payload=json.loads(row['payload']),
                 timestamp=row['timestamp'],
             )

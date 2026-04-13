@@ -17,7 +17,7 @@ class Subscription:
     """Подписка на тему сообщения."""
 
     handler: Callable[[Message], Coroutine[Any, Any, None]]
-    mes_type: str
+    mes_topic: str
     priority: int = 0
 
     def matches(self, topic: str) -> bool:
@@ -27,7 +27,7 @@ class Subscription:
         Проверяет, соответствует ли тема сообщению заданной теме подписки
         с поддержкой wildcard (* в теме).
         """
-        return fnmatch(topic, self.mes_type)
+        return fnmatch(topic, self.mes_topic)
 
 
 class MessageBus:
@@ -59,13 +59,13 @@ class MessageBus:
 
     def subscribe(
         self,
-        mes_type: str,
+        mes_topic: str,
         handler: Callable[[Message], Coroutine[Any, Any, None]],
         priority: int = 0,
     ) -> Subscription:
         """Добавить обработчик на сообщения с заданной темой."""
         sub = Subscription(
-            mes_type=mes_type,
+            mes_topic=mes_topic,
             handler=handler,
             priority=priority,
         )
@@ -73,29 +73,38 @@ class MessageBus:
         self._subscriptions.sort(key=lambda s: s.priority, reverse=True)
         logger.debug(
             "Added subscriber on topic '%s', priority=%d",
-            mes_type, priority
+            mes_topic, priority
         )
         return sub
 
     def unsubscribe(self, subscription: Subscription) -> None:
         """Удалить обработчик сообщений с заданной темой."""
-        self._subscriptions.remove(subscription)
+        try:
+            self._subscriptions.remove(subscription)
+        except ValueError:
+            pass
 
-    async def publish(self, mes_type: str, message: Message) -> None:
+    def unsubscribe_from(self, topic: str) -> None:
+        """Удалить все обработчики сообщений для заданной темы."""
+        for sub in reversed(self._subscriptions):
+            if sub.matches(topic):
+                self._subscriptions.remove(sub)
+
+    async def publish(self, mes_topic: str, message: Message) -> None:
         """Поместить сообщение в очередь."""
-        await self._queue.put((mes_type, message))
+        await self._queue.put((mes_topic, message))
         self._published_count += 1
 
-    def publish_nowait(self, mes_type, message: Message) -> None:
+    async def publish_nowait(self, mes_topic: str, message: Message) -> None:
         """Поместить сообщение в очередь (ошибка, если очередь полна)."""
-        self._queue.put_nowait((mes_type, message))
+        self._queue.put_nowait((mes_topic, message))
         self._published_count += 1
 
-    async def _dispatch(self, mes_type: str, message: Message):
+    async def _dispatch(self, mes_topic: str, message: Message):
         """Передать сообщение подписчикам."""
         matched = False
         for sub in self._subscriptions:
-            if sub.matches(mes_type):
+            if sub.matches(mes_topic):
                 matched = True
                 try:
                     await sub.handler(message)
@@ -103,26 +112,26 @@ class MessageBus:
                 except Exception as ex:
                     logger.error(
                         "Handler error on topic '%s': %s",
-                        mes_type, ex, exc_info=True
+                        mes_topic, ex, exc_info=True
                     )
                     self._error_count += 1
 
         if not matched:
-            logger.warning("No subscribers for topic '%s'", mes_type)
+            logger.warning("No subscribers for topic '%s'", mes_topic)
 
     async def _process_queue(self):
         """Обработать очередь сообщений."""
         while self._running:
             try:
-                type, message = await asyncio.wait_for(
+                topic, message = await asyncio.wait_for(
                     self._queue.get(),
                     timeout=env.float('MESQ_TIMEOUT', default=1.0)
                 )
             except asyncio.TimeoutError:
                 continue
-            if type is None:
+            if topic is None:
                 break
-            await self._dispatch(type, message)
+            await self._dispatch(topic, message)
 
     async def start(self):
         """Запуск шины сообщений."""

@@ -20,13 +20,21 @@ class ValidationStage(PipelineStage):
 
     async def process(self, message: Message) -> Message | None:
         """Валидация сообщения."""
+        rejected = False
+        rej_msg = 'Message rejected: '
         if not message.device_id:
             logger.info("Message discarded: no device_id")
-            return None
-        if not message.payload:
+            rej_msg += 'no device_id'
+            rejected = True
+        elif not message.payload:
             logger.info(
-                "Message discarded: empty payload from %d", message.device_id
+                "Message discarded: empty payload from %s", message.device_id
             )
+            rej_msg += 'empty payload'
+            rejected = True
+        if rejected:
+            message.metadata['reject_reason'] = rej_msg
+            message.metadata['reject_stage'] = self.name
             return None
         return message
 
@@ -45,16 +53,26 @@ class AuthorizationStage(PipelineStage):
 
     async def process(self, message: Message) -> Message | None:
         """Проверка авторизации девайса, приславшего сообщение."""
+        rejected = False
+        rej_msg = 'Message rejected: '
+
         device = self._registry.get(message.device_id)
         if device is None:
             logger.warning(
                 "Unauthorized device: %s", message.device_id
             )
-            return None
-        if device.device_status == DeviceStatus.ERROR:
+            rej_msg += 'unauthorized device'
+            rejected = True
+        elif device.device_status == DeviceStatus.ERROR:
             logger.warning(
                 "Message from ERROR device ignored: %s", message.device_id
             )
+            rej_msg += 'ERROR device status'
+            rejected = True
+
+        if rejected:
+            message.metadata['reject_reason'] = rej_msg
+            message.metadata['reject_stage'] = self.name
             return None
         return message
 
@@ -69,6 +87,9 @@ class CleanupStage(PipelineStage):
 
     async def process(self, message: Message) -> Message | None:
         """Удаление некорректных значений."""
+        rejected = False
+        rej_msg = 'Message rejected: '
+
         clean = {}
         for key, value in message.payload.items():
             if isinstance(value, float) and (isnan(value) or isinf(value)):
@@ -84,6 +105,12 @@ class CleanupStage(PipelineStage):
                 "Message %s dropped: payload empty after sanitization",
                 message.message_id
             )
+            rejected = True
+            rej_msg += 'payload empty after sanitization'
+
+        if rejected:
+            message.metadata['reject_reason'] = rej_msg
+            message.metadata['reject_stage'] = self.name
             return None
 
         message.payload = clean
