@@ -1,5 +1,6 @@
 """Общие фикстуры для тестов протоколов."""
 import pytest
+import json
 from models.message import Message, MessageType
 from tests.conftest import (
     DEVICE_DEF_ID,
@@ -11,6 +12,16 @@ from tests.conftest import (
     MSG_DEF_META,
     MSG_DEF_SCHEMA,
 )
+
+
+def json_payload(data: dict) -> bytes:
+    """Сериализовать словарь в байты JSON."""
+    return json.dumps(data).encode()
+
+
+def parse_response(msg: bytes) -> dict:
+    """Десериализовать payload ответа из JSON."""
+    return json.loads(msg.decode())
 
 
 @pytest.fixture

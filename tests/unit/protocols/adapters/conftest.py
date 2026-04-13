@@ -3,10 +3,15 @@ import pytest
 import pytest_asyncio
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
+from aiocoap import Message as CoAPMessage, POST as COAP_POST
+from unittest.mock import AsyncMock, MagicMock
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from protocols.adapters.http_adapter import HTTPAdapter
 from protocols.adapters.websocket_adapter import WebSocketAdapter
+from protocols.adapters.coap_adapter import (
+    CoAPAdapter, _IngestResource, _RegisterResource, _HealthResource
+)
 from tests.conftest import (
     DEVICE_DEF_ID, MSG_DEF_PAYLOAD
 )
@@ -141,3 +146,56 @@ async def ws_client(ws_adapter: WebSocketAdapter):
     await cli.start_server()
     yield cli
     await cli.close()
+
+
+@pytest_asyncio.fixture
+async def coap_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+    """CoAP-адаптер, подключённый к реальной шине и реестру."""
+    a = CoAPAdapter()
+    a.set_gateway_context(running_bus, registry)
+    yield a
+
+
+def _make_adapter(
+    bus: MagicMock | None = None,
+    registry: MagicMock | None = None,
+) -> CoAPAdapter:
+    """Создать CoAPAdapter с изолированными mock-зависимостями."""
+    adapter = CoAPAdapter()
+    if bus is None:
+        mock_bus = MagicMock()
+        mock_bus.publish = AsyncMock()
+        mock_bus.subscribe = MagicMock(return_value=MagicMock())
+        mock_bus.unsubscribe = MagicMock()
+        bus = mock_bus
+    adapter.set_gateway_context(bus, registry or MagicMock())
+    return adapter
+
+
+def coap_request(payload: bytes = b"") -> CoAPMessage:
+    """Сформировать минимальный CoAP-запрос с заданным payload."""
+    return CoAPMessage(code=COAP_POST, payload=payload)
+
+
+@pytest.fixture
+def mock_adapter() -> CoAPAdapter:
+    """CoAP-адаптер с mock-шиной (для тестов без реальной шины)."""
+    return _make_adapter()
+
+
+@pytest.fixture
+def coap_ingest(mock_adapter: CoAPAdapter) -> _IngestResource:
+    """_IngestResource, привязанный к mock-адаптеру."""
+    return _IngestResource(mock_adapter)
+
+
+@pytest.fixture
+def coap_register(mock_adapter: CoAPAdapter) -> _RegisterResource:
+    """_RegisterResource, привязанный к mock-адаптеру."""
+    return _RegisterResource(mock_adapter)
+
+
+@pytest.fixture
+def coap_health(mock_adapter: CoAPAdapter) -> _HealthResource:
+    """_HealthResource, привязанный к mock-адаптеру."""
+    return _HealthResource(mock_adapter)
