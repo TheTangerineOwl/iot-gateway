@@ -1,5 +1,6 @@
 """Общие фикстуры для всех модулей."""
 from contextlib import contextmanager
+import asyncio
 import logging
 import pytest
 import pytest_asyncio
@@ -102,6 +103,15 @@ skip_no_postgres = pytest.mark.skipif(
     not _postgres_available(pgsql_skip),
     reason='PostgreSQL недоступен'
 )
+
+
+async def drain(bus: MessageBus) -> None:
+    """Ждет, пока очередь опустеет."""
+    deadline = asyncio.get_event_loop().time() + BUS_DISPATCH_WAIT
+    while bus._queue.qsize() > 0:
+        if asyncio.get_event_loop().time() > deadline:
+            raise TimeoutError('Bus queue did not drain')
+        await asyncio.sleep(0)
 
 
 @pytest.fixture

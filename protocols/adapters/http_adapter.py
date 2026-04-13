@@ -221,12 +221,6 @@ class HTTPAdapter(ProtocolAdapter):
         """Обработчик проверки здоровья адаптера."""
         health = await self._health_check()
 
-        json = await request.json()
-        if json:
-            id = str(json.get('device_id', ''))
-            if len(id) > 0:
-                logger.log(5, 'Health check from device %s', id)
-
         logger.log(5, 'HTTP got health check')
 
         return web.json_response(health)

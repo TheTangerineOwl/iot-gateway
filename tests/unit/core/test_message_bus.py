@@ -5,18 +5,9 @@ from unittest.mock import AsyncMock
 from core.message_bus import MessageBus
 from models.message import Message
 from tests.conftest import (
-    not_raises, BUS_DISPATCH_WAIT, BUS_MAX_QUEUE,
+    not_raises, drain, BUS_MAX_QUEUE,
     TOPIC_TELEMETRY, TOPIC_TELEMETRY_WC
 )
-
-
-async def drain(bus: MessageBus) -> None:
-    """Ждет, пока очередь опустеет."""
-    deadline = asyncio.get_event_loop().time() + BUS_DISPATCH_WAIT
-    while bus._queue.qsize() > 0:
-        if asyncio.get_event_loop().time() > deadline:
-            raise TimeoutError('Bus queue did not drain')
-        await asyncio.sleep(0)
 
 
 class TestDeliver:
