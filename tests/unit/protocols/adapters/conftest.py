@@ -6,6 +6,10 @@ from aiohttp.test_utils import TestClient, TestServer
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from protocols.adapters.http_adapter import HTTPAdapter
+from protocols.adapters.websocket_adapter import WebSocketAdapter
+from tests.conftest import (
+    DEVICE_DEF_ID, MSG_DEF_PAYLOAD
+)
 
 
 @pytest_asyncio.fixture
@@ -63,3 +67,77 @@ def http_url_register(http_adapter: HTTPAdapter) -> str:
 def http_url_health(http_adapter: HTTPAdapter) -> str:
     """URL эндпоинта проверки состояния."""
     return http_adapter._url_health
+
+
+WS_TELEMETRY_BODY = {
+    'message_type': 'telemetry',
+    'device_id': DEVICE_DEF_ID,
+    'payload': MSG_DEF_PAYLOAD
+}
+
+WS_HEARTBEAT_BODY = {
+    'message_type': 'heartbeat',
+    'device_id': DEVICE_DEF_ID
+}
+
+WS_REGISTER_BODY = {
+    'message_type': 'register',
+    'device_id': DEVICE_DEF_ID,
+    'payload': {'name': 'Sensor A'}
+}
+
+HTTP_REGISTER_BODY = {
+    'device_id': DEVICE_DEF_ID,
+    'name': 'Sensor A',
+}
+
+
+@pytest.fixture
+async def ws_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+    """WebSocket-адаптер, подключенный к шине."""
+    ws_adapter = WebSocketAdapter()
+    ws_adapter.set_gateway_context(running_bus, registry)
+    yield ws_adapter
+
+
+@pytest.fixture
+def ws_url_telemetry(ws_adapter: WebSocketAdapter) -> str:
+    """URL WebSocket-эндпоинта телеметрии."""
+    return ws_adapter._url_ws_telemetry
+
+
+@pytest.fixture
+def ws_url_register(ws_adapter: WebSocketAdapter) -> str:
+    """URL эндпоинта регистрации."""
+    return ws_adapter._url_register
+
+
+@pytest.fixture
+def ws_url_health(ws_adapter: WebSocketAdapter) -> str:
+    """URL эндпоинта проверки состояния."""
+    return ws_adapter._url_health
+
+
+@pytest_asyncio.fixture
+async def ws_client(ws_adapter: WebSocketAdapter):
+    """
+    Фикстура - aiohttp TestClient без реального порта.
+
+    Маршруты регистрируются напрямую из адаптера,
+    флаг _running выставляется вручную.
+    """
+    app = web.Application()
+    app.router.add_get(
+        ws_adapter._url_ws_telemetry,
+        ws_adapter._handle_ws_ingest
+    )
+    app.router.add_post(ws_adapter._url_register, ws_adapter._handle_register)
+    app.router.add_get(ws_adapter._url_register, ws_adapter._handle_ws_ingest)
+    app.router.add_get(ws_adapter._url_health, ws_adapter._handle_health)
+    ws_adapter._running = True
+
+    server = TestServer(app)
+    cli = TestClient(server)
+    await cli.start_server()
+    yield cli
+    await cli.close()
