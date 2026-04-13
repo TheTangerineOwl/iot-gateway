@@ -1,9 +1,9 @@
 """Хранилище телеметрии на базе PostgreSQL."""
+import asyncio
 from contextlib import contextmanager
 import psycopg
 from psycopg.connection_async import AsyncConnection
 from psycopg.rows import dict_row
-
 import json
 import logging
 from typing import Any
@@ -107,6 +107,7 @@ class PostgresStorage(StorageBase):
         await self._conn.close()
         self._conn = None
         logger.info("PostgresStorage closed")
+        await asyncio.sleep(0)
 
     async def save(self, record: TelemetryRecord) -> None:
         """Сохранить запись телеметрии."""
