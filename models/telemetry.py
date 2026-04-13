@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from time import time
 from typing import Any
+from models.device import ProtocolType
 
 
 @dataclass
@@ -12,7 +13,32 @@ class TelemetryRecord:
     payload: dict[str, Any]
     timestamp: float = field(default_factory=time)
     message_id: str = ''
-    protocol: str = ''
+    protocol: ProtocolType = ProtocolType.UNKNOWN
+
+    def to_dict(self) -> dict[str, Any]:
+        """Создать словарь из записи."""
+        return {
+            'device_id': self.device_id,
+            'payload': self.payload,
+            'timestamp': self.timestamp,
+            'message_id': self.message_id,
+            'protocol': self.protocol.value
+        }
+
+    @classmethod
+    def from_dict(cls, dic: dict[str, Any]) -> 'TelemetryRecord':
+        """Создать запись из словаря."""
+        if 'device_id' not in dic.keys():
+            raise ValueError('device_id is required')
+        if 'payload' not in dic.keys():
+            raise ValueError('empty payload')
+        return cls(
+            device_id=str(dic.get('device_id', '')),
+            payload=dic.get('payload', {}),
+            timestamp=float(dic.get('timestamp', time())),
+            message_id=str(dic.get('message_id', '')),
+            protocol=ProtocolType(dic.get('protocol', ProtocolType.UNKNOWN))
+        )
 
     @classmethod
     def from_message(cls, message) -> 'TelemetryRecord':
@@ -22,5 +48,5 @@ class TelemetryRecord:
             payload=message.payload,
             timestamp=message.timestamp,
             message_id=message.message_id,
-            protocol=message.protocol,
+            protocol=message.protocol
         )
