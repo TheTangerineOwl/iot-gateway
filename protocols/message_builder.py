@@ -67,9 +67,9 @@ class MessageBuilder:
             'device_id', 'name', 'device_type',
             'protocol', 'device_status', 'last_response', 'created_at',
         },
-        MessageType.STATUS: set(
+        MessageType.STATUS: {
             'device_status',
-        )
+        }
     }
 
     _EXCLUDE_IN_PAYLOAD: dict[str, set[str]] = {
