@@ -21,6 +21,10 @@ class StorageSubscriber:
     async def handle(self, message: Message) -> None:
         """Обработать сообщение из шины и сохранить запись телеметрии."""
         try:
+            if not message.processed:
+                raise ValueError(
+                    'trying to save unproccesed message to storage'
+                )
             record = TelemetryRecord.from_message(message)
             await self._storage.save(record)
         except Exception as exc:

@@ -1,9 +1,11 @@
 """Хранилище телеметрии на базе SQLite."""
+import asyncio
 import aiosqlite
 import json
 import logging
 import os
 from storage.base import StorageBase
+from models.device import ProtocolType
 from models.telemetry import TelemetryRecord
 
 
@@ -78,6 +80,7 @@ class SQLiteStorage(StorageBase):
         await self._conn.close()
         self._conn = None
         logger.info("SQLiteStorage closed")
+        await asyncio.sleep(0)
 
     async def save(self, record: TelemetryRecord) -> None:
         """Сохранить запись телеметрии."""
@@ -112,7 +115,7 @@ class SQLiteStorage(StorageBase):
             TelemetryRecord(
                 message_id=row['message_id'],
                 device_id=row['device_id'],
-                protocol=row['protocol'],
+                protocol=ProtocolType(row['protocol']),
                 payload=json.loads(row['payload']),
                 timestamp=row['timestamp'],
             )

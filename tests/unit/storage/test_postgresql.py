@@ -1,50 +1,18 @@
 """Тест хранилища PostgreSQL."""
 import pytest
 import pytest_asyncio
-from datetime import datetime, timezone
 import json
 import psycopg
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from storage.postgresql import STATEMENTS, INSERT_SQL, PostgresStorage
 from models.telemetry import TelemetryRecord
-
-
-def make_record(**kwargs) -> TelemetryRecord:
-    """Создать запись телеметрии."""
-    defaults = dict(
-        device_id='dev-001',
-        payload={'temp': 36.6},
-        message_id='msg-001',
-        protocol='http'
-    )
-    return TelemetryRecord(**(defaults | kwargs))
-
-
-@pytest.fixture
-def mock_cursor():
-    """Мок курсора."""
-    cur = AsyncMock()
-    cur.__aenter__ = AsyncMock(return_value=cur)
-    cur.__aexit__ = AsyncMock(return_value=False)
-    cur.fetchall = AsyncMock(return_value=[])
-    return cur
-
-
-@pytest.fixture
-def mock_conn(mock_cursor):
-    """Мок подключения."""
-    conn = AsyncMock()
-    conn.cursor = MagicMock(return_value=mock_cursor)
-    conn.commit = AsyncMock()
-    conn.close = AsyncMock()
-    return conn
 
 
 @pytest_asyncio.fixture
 async def storage(mock_conn):
     """Тестовое хранилище."""
     with patch(
-        'storage.postgresql.AsyncConnection.connect',
+        'psycopg.connection_async.AsyncConnection.connect',
         return_value=mock_conn
     ):
         db = PostgresStorage(connstr='postgresql://testdb')
@@ -52,158 +20,242 @@ async def storage(mock_conn):
         yield db
 
 
-@pytest.mark.asyncio
-async def test_setup_create_tb(storage, mock_conn, mock_cursor):
-    """При запуске хранилища создается подключение и таблица."""
-    assert storage._conn is not None
-    mock_cursor.execute.await_count == len(STATEMENTS)
+class TestPostgresStorage:
+    """Тесты для PostgreSQL хранилища."""
 
-    actual_calls = [
-        call.args[0]
-        for call in mock_cursor.execute.call_args_list
-    ]
+    class TestSetup:
+        """Тесты для setup()."""
 
-    assert actual_calls == STATEMENTS
-    mock_conn.commit.assert_awaited_once()
+        @pytest.mark.asyncio
+        async def test_setup_create_tb(
+            self,
+            storage: PostgresStorage,
+            mock_conn: AsyncMock,
+            mock_cursor: AsyncMock
+        ):
+            """При запуске хранилища создается подключение и таблица."""
+            assert storage._conn is not None
+            assert mock_cursor.execute.await_count == len(STATEMENTS)
 
+            actual_calls = [
+                call.args[0]
+                for call in mock_cursor.execute.call_args_list
+            ]
 
-@pytest.mark.asyncio
-async def test_teardown_close_conn(storage, mock_conn):
-    """При остановке хранилища подключение закрывается."""
-    await storage.teardown()
-    mock_conn.close.assert_awaited_once()
-    assert storage._conn is None
+            assert actual_calls == STATEMENTS
+            mock_conn.commit.assert_awaited_once()
 
+        @pytest.mark.asyncio
+        async def test_setup_exception_is_swallowed(self):
+            """Перехватывает исключение при подключении."""
+            with patch(
+                'psycopg.connection_async.AsyncConnection.connect',
+                side_effect=psycopg.OperationalError('refused')
+            ):
+                db = PostgresStorage(connstr='postgresql://bad')
+                await db.setup()
+                assert db._conn is None
 
-@pytest.mark.asyncio
-async def test_teardown_wo_setup_raise():
-    """При остановке хранилища без запуска возникает ошибка."""
-    db = PostgresStorage(connstr='postgresql://testdb')
-    with pytest.raises(
-        psycopg.DatabaseError,
-        match='Connection not established'
-    ):
-        await db.teardown()
+        @pytest.mark.asyncio
+        async def test_setup_after_swallowed_exception_save_raises(
+            self,
+            record: TelemetryRecord
+        ):
+            """Если setup не прошел, save выдаст DatabaseError."""
+            with patch(
+                'psycopg.connection_async.AsyncConnection.connect',
+                side_effect=psycopg.OperationalError('refused')
+            ):
+                db = PostgresStorage(connstr='postgresql://bad')
+                await db.setup()
 
+            with pytest.raises(
+                psycopg.DatabaseError,
+                match='Connection not established'
+            ):
+                await db.save(record)
 
-@pytest.mark.asyncio
-async def test_save_execute_insert(storage, mock_cursor):
-    """При вызове save запись сохраняется с помощью INSERT."""
-    record = make_record()
-    await storage.save(record)
+    class TestTeardown:
+        """Тесты для teardown()."""
 
-    mock_cursor.execute.assert_awaited()
-    last_call = mock_cursor.execute.call_args_list[-1]
-    sql, params = last_call[0]
+        @pytest.mark.asyncio
+        async def test_teardown_close_conn(
+            self,
+            storage: PostgresStorage,
+            mock_conn: AsyncMock
+        ):
+            """При остановке хранилища подключение закрывается."""
+            await storage.teardown()
+            mock_conn.close.assert_awaited_once()
+            assert storage._conn is None
 
-    assert sql == INSERT_SQL
-    assert params[0] == record.message_id
-    assert params[1] == record.device_id
-    assert params[2] == record.protocol
-    assert json.loads(params[3]) == record.payload
-    assert params[4] == record.timestamp
+        @pytest.mark.asyncio
+        async def test_teardown_wo_setup_raise(self):
+            """При остановке хранилища без запуска возникает ошибка."""
+            db = PostgresStorage(connstr='postgresql://testdb')
+            with pytest.raises(
+                psycopg.DatabaseError,
+                match='Connection not established'
+            ):
+                await db.teardown()
 
+    class TestSave:
+        """Тесты для save()."""
 
-@pytest.mark.asyncio
-async def test_save_commits(storage, mock_conn):
-    """save() должен вызвать commit после INSERT."""
-    await storage.save(make_record())
+        @pytest.mark.asyncio
+        async def test_save_execute_insert(
+            self,
+            storage: PostgresStorage,
+            mock_cursor: AsyncMock,
+            record: TelemetryRecord
+        ):
+            """При вызове save запись сохраняется с помощью INSERT."""
+            await storage.save(record)
 
-    # commit вызывался минимум дважды: в setup() и в save()
-    assert mock_conn.commit.await_count >= 2
+            mock_cursor.execute.assert_awaited()
+            last_call = mock_cursor.execute.call_args_list[-1]
+            sql, params = last_call[0]
 
+            assert sql == INSERT_SQL
+            assert params[0] == record.message_id
+            assert params[1] == record.device_id
+            assert params[2] == record.protocol
+            assert json.loads(params[3]) == record.payload
+            assert params[4] == record.timestamp
 
-@pytest.mark.asyncio
-async def test_save_without_connection_raises():
-    """save() без соединения → DatabaseError."""
-    db = PostgresStorage(connstr="postgresql://testdb")
-    with pytest.raises(
-        psycopg.DatabaseError,
-        match="Connection not established"
-    ):
-        await db.save(make_record())
+        @pytest.mark.asyncio
+        async def test_save_commits(
+            self,
+            storage: PostgresStorage,
+            mock_conn: AsyncMock,
+            record: TelemetryRecord
+        ):
+            """save() должен вызвать commit после INSERT."""
+            await storage.save(record)
 
+            # commit вызывался минимум дважды: в setup() и в save()
+            assert mock_conn.commit.await_count >= 2
 
-@pytest.mark.asyncio
-async def test_save_payload_serialized_as_json(storage, mock_cursor):
-    """Поле payload сериализуется в JSON-строку, не в dict."""
-    record = make_record(payload={"nested": {"x": 1}, "list": [1, 2, 3]})
-    await storage.save(record)
+        @pytest.mark.asyncio
+        async def test_save_without_connection_raises(
+            self,
+            record: TelemetryRecord
+        ):
+            """save() без соединения вызывает DatabaseError."""
+            db = PostgresStorage(connstr="postgresql://testdb")
+            with pytest.raises(
+                psycopg.DatabaseError,
+                match="Connection not established"
+            ):
+                await db.save(record)
 
-    last_call = mock_cursor.execute.call_args_list[-1]
-    _, params = last_call[0]
-    payload_arg = params[3]
+        @pytest.mark.asyncio
+        async def test_save_payload_serialized_as_json(
+            self,
+            storage: PostgresStorage,
+            mock_cursor: AsyncMock,
+            record: TelemetryRecord
+        ):
+            """Поле payload сериализуется в JSON-строку, не в dict."""
+            await storage.save(record)
 
-    assert isinstance(payload_arg, str)
-    assert json.loads(payload_arg) == record.payload
+            last_call = mock_cursor.execute.call_args_list[-1]
+            _, params = last_call[0]
+            payload_arg = params[3]
 
+            assert isinstance(payload_arg, str)
+            assert json.loads(payload_arg) == record.payload
 
-@pytest.mark.asyncio
-async def test_get_by_device_empty(storage, mock_cursor):
-    """get_by_device() возвращает пустой список, если нет записей."""
-    mock_cursor.fetchall.return_value = []
+    class TestGetByDevice:
+        """Тесты для get_by_device()."""
 
-    result = await storage.get_by_device("dev-001")
+        @pytest.mark.asyncio
+        async def test_get_by_device_empty(
+            self,
+            storage: PostgresStorage,
+            mock_cursor: AsyncMock
+        ):
+            """get_by_device() возвращает пустой список, если нет записей."""
+            mock_cursor.fetchall.return_value = []
 
-    assert result == []
+            result = await storage.get_by_device("dev-001")
 
+            assert result == []
 
-@pytest.mark.asyncio
-async def test_get_by_device_returns_records(storage, mock_cursor):
-    """get_by_device() возвращает список записей с правильными полями."""
-    ts = datetime.now(timezone.utc)
-    mock_cursor.fetchall.return_value = [
-        {
-            "message_id": "msg-001",
-            "device_id":  "dev-001",
-            "protocol":   "http",
-            "payload":    json.dumps({"temp": 36.6}),
-            "timestamp":  ts,
-        }
-    ]
+        @pytest.mark.asyncio
+        async def test_get_by_device_returns_records(
+            self,
+            storage: PostgresStorage,
+            mock_cursor: AsyncMock,
+            record: TelemetryRecord
+        ):
+            """get_by_device возвращает список записей с правильными полями."""
+            record_dict = record.to_dict()
+            record_dict['payload'] = json.dumps(record.payload)
+            mock_cursor.fetchall.return_value = [record_dict]
 
-    result = await storage.get_by_device("dev-001")
+            result = await storage.get_by_device(record.device_id)
 
-    assert len(result) == 1
-    r = result[0]
-    assert r.device_id == "dev-001"
-    assert r.message_id == "msg-001"
-    assert r.protocol == "http"
-    assert r.payload == {"temp": 36.6}
-    assert r.timestamp == ts
+            assert len(result) == 1
+            assert result[0] == record
 
+        @pytest.mark.asyncio
+        async def test_get_by_device_multiple_records(
+            self,
+            storage: PostgresStorage,
+            mock_cursor: AsyncMock,
+            record: TelemetryRecord
+        ):
+            """get_by_device() возвращает все строки из fetchall."""
+            records = []
+            for i in range(5):
+                record.message_id = f'msg-00{i}'
+                record_dict = record.to_dict()
+                record_dict['payload'] = json.dumps(record.payload)
+                records.append(record_dict)
+            mock_cursor.fetchall.return_value = records
 
-@pytest.mark.asyncio
-async def test_get_by_device_multiple_records(storage, mock_cursor):
-    """get_by_device() возвращает все строки из fetchall."""
-    mock_cursor.fetchall.return_value = [
-        {"message_id": f"msg-00{i}", "device_id": "dev-001",
-         "protocol": "http", "payload": "{}", "timestamp": None}
-        for i in range(5)
-    ]
+            result = await storage.get_by_device(record.device_id)
+            assert len(result) == 5
 
-    result = await storage.get_by_device("dev-001")
-    assert len(result) == 5
+        @pytest.mark.asyncio
+        async def test_get_by_device_without_connection_raises(self):
+            """get_by_device() без соединения вызывает DatabaseError."""
+            db = PostgresStorage(connstr="postgresql://testdb")
+            with pytest.raises(
+                psycopg.DatabaseError,
+                match="Connection not established"
+            ):
+                await db.get_by_device("dev-001")
 
+        @pytest.mark.asyncio
+        async def test_get_by_device_passes_limit(
+            self,
+            storage: PostgresStorage,
+            mock_cursor: AsyncMock
+        ):
+            """get_by_device() передаёт limit вторым параметром в execute."""
+            mock_cursor.fetchall.return_value = []
 
-@pytest.mark.asyncio
-async def test_get_by_device_without_connection_raises():
-    """get_by_device() без соединения вызывает DatabaseError."""
-    db = PostgresStorage(connstr="postgresql://testdb")
-    with pytest.raises(
-        psycopg.DatabaseError,
-        match="Connection not established"
-    ):
-        await db.get_by_device("dev-001")
+            await storage.get_by_device("dev-001", limit=42)
 
+            last_call = mock_cursor.execute.call_args_list[-1]
+            _, params = last_call[0]
+            assert params == ("dev-001", 42)
 
-@pytest.mark.asyncio
-async def test_get_by_device_passes_limit(storage, mock_cursor):
-    """get_by_device() передаёт limit вторым параметром в execute."""
-    mock_cursor.fetchall.return_value = []
+        @pytest.mark.asyncio
+        async def test_get_by_device_payload_deserialized(
+            self,
+            storage: PostgresStorage,
+            mock_cursor: AsyncMock,
+            record: TelemetryRecord
+        ):
+            """get_by_device десериализует payload в dict."""
+            record_dict = record.to_dict()
+            record_dict['payload'] = json.dumps(record.payload)
+            mock_cursor.fetchall.return_value = [record_dict]
 
-    await storage.get_by_device("dev-001", limit=42)
+            result = await storage.get_by_device(record.device_id)
 
-    last_call = mock_cursor.execute.call_args_list[-1]
-    _, params = last_call[0]
-    assert params == ("dev-001", 42)
+            assert isinstance(result[0].payload, dict)
+            assert result[0].payload == record.payload
