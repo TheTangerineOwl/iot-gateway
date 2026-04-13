@@ -69,13 +69,19 @@ class Gateway:
                             '?application_name=gateway'
                 )
             )
-        if prefix == 'sqlite' or 'aiosqlite':
+        if prefix == 'sqlite' or prefix == 'aiosqlite':
             return SQLiteStorage(
                 db_path=env.str(
                     'STORAGE_DB_CONNSTR',
                     default='data/telemetry.db'
                 )
             )
+        return SQLiteStorage(
+            db_path=env.str(
+                'STORAGE_DB_CONNSTR',
+                default='data/telemetry.db'
+            )
+        )
 
     def _reg_adapters(self, *args: ProtocolAdapter) -> None:
         """Регистрирует все переданные адаптеры."""

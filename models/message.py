@@ -50,27 +50,27 @@ class Message:
     def to_dict(self) -> dict[str, Any]:
         """Получить данные сообщения."""
         return {
-            'message_id': str(self.message_id),
-            'message_type': MessageType(self.message_type),
-            'message_topic': str(self.message_topic),
-            'device_id': str(self.device_id),
-            'payload': dict(self.payload),
-            'timestamp': float(self.timestamp),
-            'processed': bool(self.processed),
-            'protocol': ProtocolType(self.protocol),
-            'schema_version': str(self.schema_version),
-            'metadata': dict(self.metadata)
+            'message_id': self.message_id,
+            'message_type': self.message_type.value,
+            'message_topic': self.message_topic,
+            'device_id': self.device_id,
+            'payload': self.payload,
+            'timestamp': self.timestamp,
+            'processed': self.processed,
+            'protocol': self.protocol.value,
+            'schema_version': self.schema_version,
+            'metadata': self.metadata
         }
 
     @classmethod
     def from_dict(cls, json: dict[str, Any]) -> "Message":
         """Получить сообщение из словаря."""
-        return cls(
+        msg = cls(
             message_id=str(
                 json.get('message_id', str(uuid4()))
             ),
             message_type=MessageType(
-                str(json.get('message_type', MessageType.TELEMETRY))
+                json.get('message_type', MessageType.TELEMETRY)
             ),
             message_topic=str(
                 json.get('message_topic', '')
@@ -79,7 +79,7 @@ class Message:
                 json.get('device_id', '')
             ),
             protocol=ProtocolType(
-                str(json.get('protocol', ProtocolType.UNKNOWN))
+                json.get('protocol', ProtocolType.UNKNOWN)
             ),
             payload=dict(
                 json.get('payload', dict())
@@ -92,5 +92,7 @@ class Message:
             ),
             metadata=dict(
                 json.get('metadata', dict())
-            )
+            ),
         )
+        msg.processed = bool(json.get('processed', False))
+        return msg
