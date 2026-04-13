@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock
 from core.message_bus import MessageBus
 from models.message import Message
 from tests.conftest import (
-    not_raises, telemetry_topic, BUS_DISPATCH_WAIT, BUS_MAX_QUEUE
+    not_raises, BUS_DISPATCH_WAIT, BUS_MAX_QUEUE,
+    TOPIC_TELEMETRY, TOPIC_TELEMETRY_WC
 )
 
 
@@ -30,12 +31,12 @@ class TestDeliver:
         """Сообщение доходит до подписчика."""
         handler = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler
         )
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -51,7 +52,7 @@ class TestDeliver:
     ):
         """Если нет подписчиков на тему, шина не ломается."""
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -71,16 +72,16 @@ class TestDeliver:
         handler1 = AsyncMock()
         handler2 = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler1
         )
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler2
         )
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -99,16 +100,16 @@ class TestDeliver:
         handler1 = AsyncMock()
         handler2 = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler1
         )
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler2
         )
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -129,12 +130,12 @@ class TestWildcard:
         """Топик с wildcard совпадает."""
         handler = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler
         )
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -151,12 +152,12 @@ class TestWildcard:
         """processed.telemetry.* не совпадает с telemetry.*."""
         handler = AsyncMock()
         running_bus.subscribe(
-            'processed.' + telemetry_topic(),
+            'processed.' + TOPIC_TELEMETRY_WC,
             handler
         )
 
         await running_bus.publish(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             telemetry_message
         )
         with not_raises(Exception):
@@ -173,12 +174,12 @@ class TestWildcard:
         """Если тема точно совпадает без *, то проходит."""
         handler = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             handler
         )
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -207,11 +208,11 @@ class TestPriority:
             """Обработчик подписчика с высоким приоритетом."""
             call_order.append('high')
 
-        running_bus.subscribe(telemetry_topic(), _low,  priority=0)
-        running_bus.subscribe(telemetry_topic(), _high, priority=10)
+        running_bus.subscribe(TOPIC_TELEMETRY_WC, _low,  priority=0)
+        running_bus.subscribe(TOPIC_TELEMETRY_WC, _high, priority=10)
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -236,11 +237,11 @@ class TestPriority:
             """Обработчик второго подписчика."""
             call_order.append('second')
 
-        running_bus.subscribe(telemetry_topic(), _first,  priority=10)
-        running_bus.subscribe(telemetry_topic(), _second, priority=10)
+        running_bus.subscribe(TOPIC_TELEMETRY_WC, _first,  priority=10)
+        running_bus.subscribe(TOPIC_TELEMETRY_WC, _second, priority=10)
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -262,18 +263,18 @@ class TestSubscribeUnsubscribe:
         handler1 = AsyncMock()
         handler2 = AsyncMock()
         sub = running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler1
         )
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler2
         )
 
         running_bus.unsubscribe(sub)
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -292,18 +293,18 @@ class TestSubscribeUnsubscribe:
         handler1 = AsyncMock()
         handler2 = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler1
         )
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler2
         )
 
-        running_bus.unsubscribe_from(telemetry_topic())
+        running_bus.unsubscribe_from(TOPIC_TELEMETRY_WC)
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -321,14 +322,14 @@ class TestSubscribeUnsubscribe:
         """Отписка от неизвестной темы не ломает шину."""
         handler = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler
         )
 
         running_bus.unsubscribe_from('some_topic')
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -349,12 +350,12 @@ class TestPublish:
         """Сообщение публикуется в свободную очередь."""
         with not_raises(Exception):
             await running_bus.publish(
-                telemetry_topic(telemetry_message.device_id),
+                TOPIC_TELEMETRY.format(telemetry_message.device_id),
                 telemetry_message
             )
             assert running_bus._queue.qsize() == 1
             topic, msg = running_bus._queue.get_nowait()
-        assert topic == telemetry_topic(telemetry_message.device_id)
+        assert topic == TOPIC_TELEMETRY.format(telemetry_message.device_id)
         assert msg == telemetry_message
         assert running_bus._published_count == 1
 
@@ -368,13 +369,13 @@ class TestPublish:
         with not_raises(Exception):
             for i in range(BUS_MAX_QUEUE):
                 await running_bus.publish(
-                    telemetry_topic(telemetry_message.device_id),
+                    TOPIC_TELEMETRY.format(telemetry_message.device_id),
                     telemetry_message
                 )
             assert running_bus._queue.qsize() == BUS_MAX_QUEUE
         with not_raises(Exception):
             await running_bus.publish(
-                telemetry_topic(telemetry_message.device_id),
+                TOPIC_TELEMETRY.format(telemetry_message.device_id),
                 telemetry_message
             )
 
@@ -387,12 +388,12 @@ class TestPublish:
         """Сообщение публикуется в свободную очередь."""
         with not_raises(Exception):
             await running_bus.publish_nowait(
-                telemetry_topic(telemetry_message.device_id),
+                TOPIC_TELEMETRY.format(telemetry_message.device_id),
                 telemetry_message
             )
             assert running_bus._queue.qsize() == 1
             topic, msg = running_bus._queue.get_nowait()
-        assert topic == telemetry_topic(telemetry_message.device_id)
+        assert topic == TOPIC_TELEMETRY.format(telemetry_message.device_id)
         assert msg == telemetry_message
         assert running_bus._published_count == 1
 
@@ -406,13 +407,13 @@ class TestPublish:
         with not_raises(Exception):
             for i in range(BUS_MAX_QUEUE):
                 await running_bus.publish_nowait(
-                    telemetry_topic(telemetry_message.device_id),
+                    TOPIC_TELEMETRY.format(telemetry_message.device_id),
                     telemetry_message
                 )
             assert running_bus._queue.qsize() == BUS_MAX_QUEUE
         with pytest.raises(asyncio.QueueFull):
             await running_bus.publish_nowait(
-                telemetry_topic(telemetry_message.device_id),
+                TOPIC_TELEMETRY.format(telemetry_message.device_id),
                 telemetry_message
             )
 
@@ -429,12 +430,12 @@ class TestStats:
         """Статистика после успешной доставки."""
         handler = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler
         )
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -460,12 +461,12 @@ class TestStats:
             raise ValueError('Test handler error')
 
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             _handler
         )
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -488,16 +489,16 @@ class TestStats:
         handler1 = AsyncMock()
         handler2 = AsyncMock()
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler1
         )
         running_bus.subscribe(
-            telemetry_topic(),
+            TOPIC_TELEMETRY_WC,
             handler2
         )
 
         await running_bus.publish(
-            telemetry_topic(telemetry_message.device_id),
+            TOPIC_TELEMETRY.format(telemetry_message.device_id),
             telemetry_message
         )
         with not_raises(Exception):
@@ -521,7 +522,7 @@ class TestStats:
         with not_raises(Exception):
             for i in range(5):
                 running_bus.subscribe(
-                    telemetry_topic(telemetry_message.device_id),
+                    TOPIC_TELEMETRY.format(telemetry_message.device_id),
                     handler
                 )
         stats = running_bus.stats

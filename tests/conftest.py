@@ -25,10 +25,26 @@ BUS_MAX_QUEUE = 100
 BUS_DISPATCH_WAIT = 0.05
 
 # Тестовые устройства
-DEVICE_ID_DEFAULT = "dev-001"
-DEVICE_ID_ONLINE = "dev-online"
+DEVICE_DEF_ID = "dev-001"
 DEVICE_NAME = "Thermometer"
-DEVICE_DEF_PAYLOAD = {"temp": 42.0}
+DEVICE_DEF_STATUS = DeviceStatus.ONLINE
+DEVICE_DEF_PROTOCOL = ProtocolType.HTTP
+DEVICE_DEF_TYPE = DeviceType.SENSOR
+
+# Тестовое сообщение
+MSG_DEF_ID = 'mes-001'
+MSG_DEF_TOPIC = 'test.topic'
+MSG_DEF_PROTOCOL = ProtocolType.HTTP
+MSG_DEF_TYPE = MessageType.TELEMETRY
+MSG_DEF_PAYLOAD = {"temp": 42.0}
+MSG_DEF_META = {'meta': 'test'}
+MSG_DEF_SCHEMA = '1.0'
+
+# Топики
+TOPIC_TELEMETRY_WC = 'telemetry.*'
+TOPIC_TELEMETRY = 'telemetry.%s'
+TOPIC_REGISTER_WC = 'device.register.*'
+TOPIC_REGISTER = 'device.register.%s'
 
 
 @contextmanager
@@ -40,16 +56,6 @@ def not_raises(exception: type[Exception]):
         raise pytest.fail(
             'DID RAISE {0}: {1}'.format(exception, exc)
         )
-
-
-def register_topic(topic: str = '*'):
-    """Возвращает строку топика регистрации с суффиксом."""
-    return f'device.register.{topic}'
-
-
-def telemetry_topic(topic: str = '*'):
-    """Возвращает строку топика телеметрии с суффиксом."""
-    return f'telemetry.{topic}'
 
 
 @pytest.fixture(autouse=True, scope='session')
@@ -110,13 +116,15 @@ def registry():
 @pytest.fixture
 def device():
     """Устройство со всеми явными полями, чтобы тесты не зависели от uuid4."""
-    return Device(
-        device_id=DEVICE_ID_DEFAULT,
+    device = Device(
+        device_id=DEVICE_DEF_ID,
         name=DEVICE_NAME,
-        device_type=DeviceType.SENSOR,
-        device_status=DeviceStatus.ONLINE,
-        protocol=ProtocolType.HTTP,
+        device_type=DEVICE_DEF_TYPE,
+        device_status=DEVICE_DEF_STATUS,
+        protocol=DEVICE_DEF_PROTOCOL,
     )
+    device.last_response = device.created_at
+    return device
 
 
 @pytest_asyncio.fixture
@@ -132,10 +140,14 @@ async def running_bus():
 def telemetry_message():
     """Тестовое сообщение телеметрии."""
     return Message(
-        device_id=DEVICE_ID_DEFAULT,
-        message_type=MessageType.TELEMETRY,
-        payload=DEVICE_DEF_PAYLOAD,
-        protocol=ProtocolType.HTTP,
+        message_id=MSG_DEF_ID,
+        device_id=DEVICE_DEF_ID,
+        message_type=MSG_DEF_TYPE,
+        message_topic=MSG_DEF_TOPIC,
+        payload=MSG_DEF_PAYLOAD,
+        protocol=MSG_DEF_PROTOCOL,
+        schema_version=MSG_DEF_SCHEMA,
+        metadata=MSG_DEF_META
     )
 
 
@@ -146,6 +158,7 @@ def mock_storage():
     storage.save = AsyncMock()
     storage.setup = AsyncMock()
     storage.teardown = AsyncMock()
+    storage.get_by_device = AsyncMock()
     return storage
 
 
