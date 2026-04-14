@@ -1,11 +1,3 @@
----
-name: Внесение улучшений
-about: Внесение улучшений в master по результату выполнения задач
-title: '[PR] '
-labels: sure
-assignees: 'TheTangerineOwl'
-projects: 'TheTangerineOwl/1'
----
 ### Описание внесенных изменений
 
 <-- Короткое описание изменений. -->
