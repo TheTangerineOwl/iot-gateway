@@ -218,3 +218,36 @@ __marimo__/
 
 **/*.db
 data/
+
+# Виртуальное окружение
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Тесты и симулятор — не нужны в образе
+tests/
+pytest.ini
+setup.cfg
+simulator/
+run_sim.py
+
+# Рабочие данные и логи (монтируются через volumes)
+data/
+logs/
+
+# Конфигурация окружения
+.env
+*.env
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.DS_Store
