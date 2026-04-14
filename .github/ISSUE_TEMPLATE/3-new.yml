@@ -1,0 +1,32 @@
+name: Новая функция
+description: Для нового функционала
+title: "[NEW] "
+labels: ["new feat"]
+projects: ["TheTangerineOwl/1"]
+assignees:
+  - TheTangerineOwl
+type: newfeat-issue
+body:
+  - type: textarea
+    id: what-needed
+    attributes:
+      label: Что можно ввести нового?
+      description: Подробное описание того, что требует улучшения
+      placeholder: Описание нынешней ситуации
+    validations:
+      required: true
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: Что это даст?
+      description: Какие преимущества появятся
+      placeholder: Описание улучшений
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Дополнительная информация
+      description: Что-то, что может быть полезно
+    validations:
+      required: false
