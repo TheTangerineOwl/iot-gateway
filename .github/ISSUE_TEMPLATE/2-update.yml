@@ -1,0 +1,32 @@
+name: Обновление
+description: Для обновления существующего функционала
+title: "[UPD] "
+labels: ["update"]
+projects: ["TheTangerineOwl/1"]
+assignees:
+  - TheTangerineOwl
+type: update-issue
+body:
+  - type: textarea
+    id: what-now
+    attributes:
+      label: Как это работает сейчас?
+      description: Подробное описание того, что требует улучшения
+      placeholder: Описание нынешней ситуации
+    validations:
+      required: true
+  - type: textarea
+    id: what-needed
+    attributes:
+      label: Что можно улучшить?
+      description: Описание того, что можно улучшить
+      placeholder: Описание улучшений
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Дополнительная информация
+      description: Что-то, что может быть полезно
+    validations:
+      required: false
