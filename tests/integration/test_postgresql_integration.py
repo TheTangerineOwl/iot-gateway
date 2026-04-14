@@ -4,6 +4,7 @@ import pytest_asyncio
 from tests.conftest import skip_no_postgres
 from pytest_postgresql import factories
 from storage.postgresql import PostgresStorage
+from models.device import ProtocolType
 from models.telemetry import TelemetryRecord
 
 
@@ -38,7 +39,7 @@ async def test_save_and_get(storage):
         device_id="dev-001",
         payload={"temp": 36.6},
         message_id="msg-001",
-        protocol="http",
+        protocol=ProtocolType.HTTP,
     )
     await storage.save(record)
 
@@ -48,7 +49,7 @@ async def test_save_and_get(storage):
     assert results[0].device_id == "dev-001"
     assert results[0].message_id == "msg-001"
     assert results[0].payload == {"temp": 36.6}
-    assert results[0].protocol == "http"
+    assert results[0].protocol == ProtocolType.HTTP
 
 
 @pytest.mark.asyncio
