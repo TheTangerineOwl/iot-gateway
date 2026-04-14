@@ -1,0 +1,42 @@
+name: Отчет о баге
+description: Заполнить отчет о баге
+title: "[BUG] "
+labels: ["bug"]
+projects: ["TheTangerineOwl/1"]
+assignees:
+  - TheTangerineOwl
+type: bug
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Что произошло?
+      description: Подробное описание того, в чем проявляется баг
+      placeholder: Симптомы...
+    validations:
+      required: true
+  - type: textarea
+    id: what-was-expected
+    attributes:
+      label: Что должно было произойти?
+      description: Описание того, что ожидалось
+      placeholder: Тесты должны были пройти...
+      value: Должны были успешно пройти тесты.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Вывод лога
+      description: Относящийся к багу вывод лога
+      render: bash
+    validations:
+      required: false
+  - type: upload
+    id: screenshots
+    attributes:
+      label: Скриншоты
+      description: Если необходимо добавить скриншоты или файлы логов
+    validations:
+      required: false
+      accept: ".png,.jpg,.gif,.log,.txt,.zip,.mp4"
