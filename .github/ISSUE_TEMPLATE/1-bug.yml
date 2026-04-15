@@ -1,5 +1,5 @@
-name: Отчет о баге
-description: Заполнить отчет о баге
+name: Bug report
+description: For reporting problems
 title: "[BUG] "
 labels: ["bug"]
 projects: ["TheTangerineOwl/1"]
