@@ -27,7 +27,7 @@ docker-compose up -d
 ```
 Это поднимет:
 - PostgreSQL на порту `5432`
-- IoT Gateway с адаптерами на портах `8081` (HTTP), `8082` (WebSocket), `5683` (CoAP/UDP)
+- IoT Gateway с адаптерами на портах `8081` (HTTP), `8082` (WebSocket), `5683` (CoAP/UDP), `1883` (MQTT)
 #### 4. Проверить статус
 Проверить логи:
 ```bash
@@ -140,6 +140,31 @@ COAP_URL_REGISTER=/devices/register
 COAP_URL_HEALTH=/health
 COAP_TIMEOUT_REJECT=0.5
 ```
+#### MQTT Адаптер
+```env
+MQTT_BROKER_HOST=localhost
+MQTT_BROKER_PORT=1883
+MQTT_CLIENT_ID=iot-gateway
+MQTT_USERNAME=
+MQTT_PASSWORD=
+MQTT_USE_TLS=False
+MQTT_CA_CERTS=
+MQTT_CERTFILE=
+MQTT_KEYFILE=
+
+MQTT_TOPIC_TELEMETRY=devices/+/telemetry
+MQTT_TOPIC_REGISTER=devices/+/register
+MQTT_TOPIC_STATUS=devices/+/status
+MQTT_TOPIC_COMMAND_RESPONSE=devices/+/command/response
+MQTT_TOPIC_COMMAND=devices/{device_id}/command
+
+MQTT_KEEPALIVE=60
+MQTT_QOS=1
+MQTT_CLEAN_SESSION=True
+MQTT_RECONNECT_DELAY=5
+MQTT_MAX_RECONNECT_DELAY=300
+MQTT_TIMEOUT_REJECT=2.0
+```
 #### Логирование и отладка
 ```env
 DEBUG=True
@@ -221,6 +246,33 @@ echo -n '{"device_id":"sensor-003","timestamp":"2026-04-07T12:00:00Z","data":{"m
 ### Установка зависимостей для тестирования
 ```bash
 pip install pytest pytest-asyncio pytest-postgresql
+```
+### MQTT Адаптер
+MQTT адаптер работает по TCP на порту 1883 и позволяет устройствам подключаться через стандартный MQTT брокер.
+
+**Регистрация устройства (публикация на `devices/register`):**
+```bash
+mosquitto_pub -h localhost -p 1883 -t devices/register -m '{
+  "device_id": "sensor-004",
+  "device_name": "Pressure Sensor",
+  "device_type": "pressure"
+}'
+```
+
+**Отправка телеметрии (публикация на `devices/telemetry`):**
+```bash
+mosquitto_pub -h localhost -p 1883 -t devices/telemetry -m '{
+  "device_id": "sensor-004",
+  "timestamp": "2026-04-07T12:00:00Z",
+  "data": {
+    "pressure": 1013.25,
+    "altitude": 100.5
+  }'
+```
+
+**Подписка на топик для проверки:**
+```bash
+mosquitto_sub -h localhost -p 1883 -t devices/#
 ```
 ### Запуск тестов
 ```bash
