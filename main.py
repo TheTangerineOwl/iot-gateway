@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime
 import logging
 from pathlib import Path
-from sys import exit
+from sys import exit, platform
 from core.gateway import Gateway
 from config.config import load_env, get_log_severity
 
@@ -40,6 +40,10 @@ async def main():
 
 if __name__ == '__main__':
     try:
+        if platform == 'win32':
+            asyncio.set_event_loop_policy(
+                asyncio.WindowsSelectorEventLoopPolicy()
+            )
         asyncio.run(main())
     except KeyboardInterrupt:
         logger = logging.getLogger(__name__)
