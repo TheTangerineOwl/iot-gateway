@@ -5,7 +5,6 @@ labels: ["bug"]
 projects: ["TheTangerineOwl/1"]
 assignees:
   - TheTangerineOwl
-type: bug
 body:
   - type: textarea
     id: what-happened
