@@ -250,6 +250,8 @@ pip install pytest pytest-asyncio pytest-postgresql
 ### MQTT Адаптер
 MQTT адаптер работает по TCP на порту 1883 и позволяет устройствам подключаться через стандартный MQTT брокер.
 
+Контейнер с брокером Mosquitto можно запустить через `scripts/mqtt_broker.sh`.
+
 **Регистрация устройства (публикация на `devices/register`):**
 ```bash
 mosquitto_pub -h localhost -p 1883 -t devices/register -m '{
