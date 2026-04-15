@@ -1,5 +1,5 @@
-name: Новая функция
-description: Для нового функционала
+name: "Новая функция"
+description: "Для нового функционала"
 title: "[NEW] "
 labels: ["new feat"]
 projects: ["TheTangerineOwl/1"]
