@@ -1,5 +1,5 @@
-name: Update
-description: For updating existing features
+name: Обновление
+description: Для обновления существующего функционала
 title: "[UPD] "
 labels: ["update"]
 projects: ["TheTangerineOwl/1"]
