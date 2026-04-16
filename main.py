@@ -4,12 +4,14 @@ from datetime import datetime
 import logging
 from pathlib import Path
 from sys import exit
+from typenv import Env
 from core.gateway import Gateway
-from config.config import load_env, get_log_severity
+from config.config import load_env, get_log_severity_env, load_configuration
 
 
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / '.env'
+CONFIG_PATH = BASE_DIR / 'config' / 'configuration'
 
 
 async def main():
@@ -27,12 +29,19 @@ async def main():
         encoding='utf-8',
         format="%(asctime)s │ %(levelname)-7s │ %(name)-30s │ %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        level=get_log_severity()
+        level=get_log_severity_env()
     )
     logging.getLogger('aiohttp').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
     logging.getLogger('aiosqlite').setLevel(logging.WARNING)
     logging.getLogger('coap-server').setLevel(logging.WARNING)
+
+    # env = Env(upper=True)
+
+    # load_configuration(
+    #     config_folder=CONFIG_PATH,
+    #     env=env
+    # )
 
     gateway = Gateway()
     await gateway.run_forever()

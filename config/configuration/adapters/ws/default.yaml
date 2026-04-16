@@ -1,0 +1,10 @@
+websocket:
+  enabled: true
+  host: 0.0.0.0
+  port: 5683
+  url_root: /api/v1/ws
+  endpoints:
+    general: /ingest
+    register_http: /devices/register
+    health_http: /health
+  timeout_reject: 0.5

@@ -1,0 +1,14 @@
+general:
+  id: 1
+  name: IoT Gateway
+  allowed_hosts: ['localhost', '127.0.0.1']
+registry:
+  max_devices: 1000
+  timeout_stale: 120.0
+  check_interval: 30.0
+message_bus:
+  max_queue: 1000
+  timeout: 1.0
+logger:
+  debug: true
+  level: INFO
