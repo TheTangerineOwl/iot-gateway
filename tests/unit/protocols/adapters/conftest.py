@@ -5,16 +5,23 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from aiocoap import Message as CoAPMessage, POST as COAP_POST
 from unittest.mock import AsyncMock, MagicMock
+from typenv import Env
+from config.config import load_env
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from protocols.adapters.http_adapter import HTTPAdapter
 from protocols.adapters.websocket_adapter import WebSocketAdapter
+from protocols.adapters.mqtt_adapter import MQTTAdapter
 from protocols.adapters.coap_adapter import (
     CoAPAdapter, _IngestResource, _RegisterResource, _HealthResource
 )
 from tests.conftest import (
     DEVICE_DEF_ID, MSG_DEF_PAYLOAD
 )
+
+
+load_env('env.example')
+env = Env(upper=True)
 
 
 @pytest_asyncio.fixture
@@ -199,3 +206,11 @@ def coap_register(mock_adapter: CoAPAdapter) -> _RegisterResource:
 def coap_health(mock_adapter: CoAPAdapter) -> _HealthResource:
     """_HealthResource, привязанный к mock-адаптеру."""
     return _HealthResource(mock_adapter)
+
+
+@pytest.fixture
+def mqtt_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+    """MQTT-адаптер для тестов."""
+    adapter = MQTTAdapter()
+    adapter.set_gateway_context(running_bus, registry)
+    yield adapter
