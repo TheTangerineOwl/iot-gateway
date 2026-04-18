@@ -1,5 +1,4 @@
 """Тесты для YAMLConfigLoader."""
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 import pytest
@@ -8,22 +7,18 @@ from typing import Iterable
 from config.config import YAMLConfigLoader
 
 
-BASE_DIR = Path(__file__).resolve().parent
-
-
 @pytest.fixture
-def temp_config_dir():
+def temp_config_dir(tmp_path):
     """Создать временную папку для конфигурации с тестовыми файлами."""
-    with tempfile.TemporaryDirectory(dir=BASE_DIR) as tmpdir:
-        config_dir = Path(tmpdir)
+    config_dir = Path(tmp_path)
 
-        gateway_dir = config_dir / 'gateway'
-        gateway_dir.mkdir(parents=True, mode=666)
-        gateway_yml = gateway_dir / "default.yml"
+    gateway_dir = config_dir / 'gateway'
+    gateway_dir.mkdir(parents=True, mode=666, exist_ok=True)
+    gateway_yml = gateway_dir / "default.yml"
 
-        gateway_yml.touch(666)
-        gateway_yml.write_text(
-            """
+    gateway_yml.touch(666, exist_ok=True)
+    gateway_yml.write_text(
+        """
 logging:
   level: INFO
   debug: false
@@ -32,14 +27,14 @@ general:
   id: test_gateway
   timeout: 30
             """
-        )
+    )
 
-        http_dir = config_dir / "adapters" / "http"
-        http_dir.mkdir(parents=True, mode=666)
+    http_dir = config_dir / "adapters" / "http"
+    http_dir.mkdir(parents=True, mode=666, exist_ok=True)
 
-        default_http = http_dir / "default.yaml"
-        default_http.touch(666)
-        default_http.write_text("""
+    default_http = http_dir / "default.yaml"
+    default_http.touch(666, exist_ok=True)
+    default_http.write_text("""
 enabled: true
 host: 0.0.0.0
 port: 8081
@@ -51,19 +46,19 @@ health: /health
 timeout_reject: 0.5
 """)
 
-        running_http = http_dir / "running.yaml"
-        running_http.touch(666)
-        running_http.write_text("""
+    running_http = http_dir / "running.yaml"
+    running_http.touch(666, exist_ok=True)
+    running_http.write_text("""
 port: 8082
 debug: true
 """)
 
-        sqlite_dir = config_dir / "storage" / "sqlite"
-        sqlite_dir.mkdir(parents=True, mode=666)
+    sqlite_dir = config_dir / "storage" / "sqlite"
+    sqlite_dir.mkdir(parents=True, mode=666, exist_ok=True)
 
-        default_sqlite = sqlite_dir / "default.yaml"
-        default_sqlite.touch(666)
-        default_sqlite.write_text("""
+    default_sqlite = sqlite_dir / "default.yaml"
+    default_sqlite.touch(666, exist_ok=True)
+    default_sqlite.write_text("""
 enabled: true
 path: ./data/app.db
 timeout: 5
@@ -71,19 +66,19 @@ cache_size: 2000
 journal_mode: WAL
 """)
 
-        yield config_dir
+    yield config_dir
 
 
 @pytest.fixture
-def temp_config_empty_dir():
+def temp_config_empty_dir(tmp_path):
     """Папка с пустым конфигом."""
-    with tempfile.TemporaryDirectory(dir=BASE_DIR) as tmpdir:
-        config_dir = Path(tmpdir)
+    config_dir = Path(tmp_path)
 
-        empty_yml = config_dir / "default.yml"
-        empty_yml.touch(666)
+    empty_yml = config_dir / "default.yml"
+    config_dir.mkdir(mode=666, parents=True, exist_ok=True)
+    empty_yml.touch(666, exist_ok=True)
 
-        yield config_dir
+    yield config_dir
 
 
 @pytest.fixture
@@ -440,9 +435,6 @@ class TestEdgeCases:
 
     def test_empty_yaml_file(self, temp_config_empty_dir):
         """Тест загрузки пустого .yml."""
-        empty_file = temp_config_empty_dir / "default.yml"
-        empty_file.write_text("")
-
         loader = YAMLConfigLoader(str(temp_config_empty_dir))
         config = loader.load()
         assert config == {}
