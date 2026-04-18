@@ -272,7 +272,7 @@ class TestMQTTAdapterTLS:
         assert mqtt_adapter.tls_insecure is False
 
     @pytest.mark.asyncio
-    async def test_connect_with_tls_enabled(self):
+    async def test_connect_with_tls_enabled(self, config):
         """Подключение с TLS работает корректно."""
         with patch.dict(
             'os.environ',
@@ -281,7 +281,7 @@ class TestMQTTAdapterTLS:
                 'MQTT_TLS_INSECURE': 'false'
             }
         ):
-            adapter = MQTTAdapter()
+            adapter = MQTTAdapter(config)
             with patch(
                 'protocols.adapters.mqtt_adapter.Client'
             ) as mock_client_class:

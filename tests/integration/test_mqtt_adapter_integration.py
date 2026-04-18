@@ -1,7 +1,6 @@
 """Интеграционные тесты для MQTT адаптера с message bus."""
 import asyncio
 import pytest
-import pytest_asyncio
 from unittest.mock import AsyncMock, patch
 from typenv import Env
 from config.config import load_env
@@ -10,7 +9,7 @@ from core.registry import DeviceRegistry
 from models.message import Message, MessageType
 from protocols.adapters.mqtt_adapter import MQTTAdapter
 from tests.conftest import (
-    DEVICE_DEF_ID, BUS_MAX_QUEUE, REGISTRY_MAX_DEVICES, REGISTRY_STALE_TIMEOUT
+    DEVICE_DEF_ID
 )
 
 
@@ -19,27 +18,9 @@ env = Env(upper=True)
 
 
 @pytest.fixture
-def registry():
-    """Реестр с маленьким лимитом устройств и долгим stale-таймаутом."""
-    return DeviceRegistry(
-        max_devices=REGISTRY_MAX_DEVICES,
-        stale_timeout=REGISTRY_STALE_TIMEOUT
-    )
-
-
-@pytest_asyncio.fixture
-async def running_bus():
-    """Рабочая шина."""
-    bus = MessageBus(max_queue=BUS_MAX_QUEUE)
-    await bus.start()
-    yield bus
-    await bus.stop()
-
-
-@pytest.fixture
-def mqtt_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+def mqtt_adapter(config, running_bus: MessageBus, registry: DeviceRegistry):
     """MQTT-адаптер для тестов."""
-    adapter = MQTTAdapter()
+    adapter = MQTTAdapter(config)
     adapter.set_gateway_context(running_bus, registry)
     yield adapter
 

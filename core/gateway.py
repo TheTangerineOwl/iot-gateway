@@ -125,7 +125,8 @@ class Gateway:
         adapter_types: dict[str, type[ProtocolAdapter]] = {
             'HTTP': HTTPAdapter,
             'CoAP': CoAPAdapter,
-            'WebSocket': WebSocketAdapter
+            'WebSocket': WebSocketAdapter,
+            'MQTT': MQTTAdapter
         }
         for name, builder in adapter_types.items():
             if get_conf(

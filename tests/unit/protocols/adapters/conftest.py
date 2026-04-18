@@ -184,6 +184,7 @@ def _make_adapter(
     adapter = CoAPAdapter(config)
     if bus is None:
         mock_bus = MagicMock()
+        mock_bus._config = config
         mock_bus.publish = AsyncMock()
         mock_bus.subscribe = MagicMock(return_value=MagicMock())
         mock_bus.unsubscribe = MagicMock()
@@ -222,8 +223,12 @@ def coap_health(mock_adapter: CoAPAdapter) -> _HealthResource:
 
 
 @pytest.fixture
-def mqtt_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+def mqtt_adapter(
+    config: YAMLConfigLoader,
+    running_bus: MessageBus,
+    registry: DeviceRegistry
+):
     """MQTT-адаптер для тестов."""
-    adapter = MQTTAdapter()
+    adapter = MQTTAdapter(config)
     adapter.set_gateway_context(running_bus, registry)
     yield adapter
