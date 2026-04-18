@@ -21,7 +21,7 @@ def temp_config_dir():
         gateway_dir.mkdir(parents=True, mode=666)
         gateway_yml = gateway_dir / "default.yml"
 
-        # gateway_yml.touch(666)
+        gateway_yml.touch(666)
         gateway_yml.write_text(
             """
 logging:
