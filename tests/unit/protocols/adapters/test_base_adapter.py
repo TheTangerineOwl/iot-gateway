@@ -2,6 +2,7 @@
 import asyncio
 import pytest
 import pytest_asyncio
+from config.config import YAMLConfigLoader
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from models.message import Message
@@ -25,17 +26,21 @@ class _StubAdapter(ProtocolAdapter):
 
 
 @pytest_asyncio.fixture
-async def stub_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+async def stub_adapter(
+    config: YAMLConfigLoader,
+    running_bus: MessageBus,
+    registry: DeviceRegistry
+):
     """Заглушка адаптера, подключённая к шине и реестру."""
-    a = _StubAdapter()
+    a = _StubAdapter(config)
     a.set_gateway_context(running_bus, registry)
     yield a
 
 
 @pytest_asyncio.fixture
-async def disconnected_adapter():
+async def disconnected_adapter(config: YAMLConfigLoader):
     """Заглушка адаптера без подключения к шине."""
-    return _StubAdapter()
+    return _StubAdapter(config)
 
 
 class TestProtocolName:

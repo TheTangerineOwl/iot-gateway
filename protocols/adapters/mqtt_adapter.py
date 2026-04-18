@@ -15,39 +15,70 @@ from typing import Optional, Dict, Any
 from contextlib import AsyncExitStack
 from aiomqtt import Client, MqttError, TLSParameters, ProtocolVersion
 import ssl
-from typenv import Env
+from config.config import YAMLConfigLoader
 from protocols.adapters.base import ProtocolAdapter
 from models.message import Message, MessageType
 from models.device import ProtocolType
 
 
-env = Env(upper=True)
 logger = logging.getLogger(__name__)
 
 
 class MQTTAdapter(ProtocolAdapter):
     """MQTT адаптер протокола."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: YAMLConfigLoader) -> None:
         """Инициализация MQTT протокола."""
-        super().__init__()
+        super().__init__(config)
+        self._adapter_config = self._config.get_adapter_config(
+            self.protocol_name
+        )
+        self.broker_host = self._adapter_config.get(
+            'broker', {}
+        ).get('host', '0.0.0.0')
+        self.broker_port = int(self._adapter_config.get(
+            'broker', {}
+        ).get('port', 1883))
+        self.bind_address = self._adapter_config.get(
+            'bind', {}
+        ).get('address', '0.0.0.0')
+        self.bind_port = int(self._adapter_config.get(
+            'bind', {}
+        ).get('port', 1883))
 
-        self.broker_host = env.str("MQTT_BROKER_HOST", default="localhost")
-        self.broker_port = env.int("MQTT_BROKER_PORT", default=1883)
-        self.username = env.str("MQTT_USERNAME")
-        self.password = env.str("MQTT_PASSWORD")
-        self.client_id = env.str("MQTT_CLIENT_ID", default="iot-gateway")
-        self.keepalive = env.int("MQTT_KEEPALIVE", default=60)
-        self.qos = env.int("MQTT_QOS", default=1)
+        self.username = self._adapter_config.get(
+            'auth', {}
+        ).get('username', '')
+        self.password = self._adapter_config.get(
+            'auth', {}
+        ).get('password', '')
+        self.client_id = self._adapter_config.get('client_id', 'iot-gateway')
+        self.clean_session: bool = self._adapter_config.get(
+            'clean_session', True
+        ) is True
+        self.keepalive = int(self._adapter_config.get('keepalive', 60))
+        self.qos = int(self._adapter_config.get('qos', 1))
 
-        self.use_tls = env.bool("MQTT_USE_TLS", default=False)
-        self.tls_ca_certs = env.str("MQTT_CA_CERTS")
-        self.tls_certfile = env.str("MQTT_CERTFILE")
-        self.tls_keyfile = env.str("MQTT_KEYFILE")
-        self.tls_insecure = env.bool("MQTT_TLS_INSECURE", default=False)
-
+        self.use_tls = self._adapter_config.get(
+            'tls', {}
+        ).get('use', False) is True
+        self.tls_ca_certs = self._adapter_config.get(
+            'tls', {}
+        ).get('ca_certs', '')
+        self.tls_certfile = self._adapter_config.get(
+            'tls', {}
+        ).get('certfile', '')
+        self.tls_keyfile = self._adapter_config.get(
+            'tls', {}
+        ).get('keyfile', '')
+        self._tls_keyfile_password = self._adapter_config.get(
+            'tls', {}
+        ).get('keyfile_password', '')
+        self.tls_insecure = self._adapter_config.get(
+            'tls', {}
+        ).get('insecure', False) is True
         # MQTT protocol version (4 for 3.1.1, 5 for 5.0)
-        env_prot_version = env.str('MQTT_PROTOCOL_VERSION', default='4')
+        env_prot_version = self._adapter_config.get('version', '4')
         if env_prot_version.startswith('5'):
             self.protocol_version = ProtocolVersion.V5
         else:
@@ -56,8 +87,13 @@ class MQTTAdapter(ProtocolAdapter):
         self.client: Optional[Client] = None
         self.is_connected = False
 
-        self._reconnect_interval: float = 3.0
-        self._max_reconnect_interval: float = 300.0
+        self._default_reconnect_interval: float = self._adapter_config.get(
+            'reconnect_delay', 3
+        )
+        self._reconnect_interval = self._default_reconnect_interval
+        self._max_reconnect_interval: float = self._adapter_config.get(
+            'max_reconnect_delay', 300
+        )
         self._exit_stack: Optional[AsyncExitStack] = None
 
         self._message_task: Optional[asyncio.Task] = None
@@ -102,6 +138,7 @@ class MQTTAdapter(ProtocolAdapter):
                     ca_certs=self.tls_ca_certs,
                     certfile=self.tls_certfile,
                     keyfile=self.tls_keyfile,
+                    keyfile_password=self._tls_keyfile_password,
                     cert_reqs=ssl.CERT_NONE
                     if self.tls_insecure
                     else ssl.CERT_REQUIRED,
@@ -115,10 +152,13 @@ class MQTTAdapter(ProtocolAdapter):
                 "port": self.broker_port,
                 "identifier": self.client_id,
                 "keepalive": self.keepalive,
+                "clean_session": self.clean_session,
                 "protocol": self.protocol_version,
                 "username": self.username,
                 "password": self.password,
-                "tls_params": tls_params
+                "tls_params": tls_params,
+                "bind_address": self.bind_address,
+                "bind_port": self.bind_port
             }
 
             if not self.client:
@@ -131,7 +171,7 @@ class MQTTAdapter(ProtocolAdapter):
             await self._exit_stack.enter_async_context(self.client)
 
             self.is_connected = True
-            self._reconnect_interval = 3.0
+            self._reconnect_interval = self._default_reconnect_interval
             logger.info("Successfully connected to MQTT broker")
 
             await self._subscribe_topics()

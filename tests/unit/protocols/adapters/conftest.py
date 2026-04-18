@@ -6,7 +6,7 @@ from aiohttp.test_utils import TestClient, TestServer
 from aiocoap import Message as CoAPMessage, POST as COAP_POST
 from unittest.mock import AsyncMock, MagicMock
 from typenv import Env
-from config.config import load_env
+from config.config import load_env, YAMLConfigLoader
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from protocols.adapters.http_adapter import HTTPAdapter
@@ -25,9 +25,13 @@ env = Env(upper=True)
 
 
 @pytest_asyncio.fixture
-async def http_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+async def http_adapter(
+    config: YAMLConfigLoader,
+    running_bus: MessageBus,
+    registry: DeviceRegistry
+):
     """HTTP-адаптер, подключённый к шине."""
-    a = HTTPAdapter()
+    a = HTTPAdapter(config)
     a.set_gateway_context(running_bus, registry)
     yield a
 
@@ -105,9 +109,13 @@ HTTP_REGISTER_BODY = {
 
 
 @pytest.fixture
-async def ws_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+async def ws_adapter(
+    config: YAMLConfigLoader,
+    running_bus: MessageBus,
+    registry: DeviceRegistry
+):
     """WebSocket-адаптер, подключенный к шине."""
-    ws_adapter = WebSocketAdapter()
+    ws_adapter = WebSocketAdapter(config)
     ws_adapter.set_gateway_context(running_bus, registry)
     yield ws_adapter
 
@@ -156,21 +164,27 @@ async def ws_client(ws_adapter: WebSocketAdapter):
 
 
 @pytest_asyncio.fixture
-async def coap_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+async def coap_adapter(
+    config: YAMLConfigLoader,
+    running_bus: MessageBus,
+    registry: DeviceRegistry
+):
     """CoAP-адаптер, подключённый к реальной шине и реестру."""
-    a = CoAPAdapter()
+    a = CoAPAdapter(config)
     a.set_gateway_context(running_bus, registry)
     yield a
 
 
 def _make_adapter(
+    config: YAMLConfigLoader,
     bus: MagicMock | None = None,
     registry: MagicMock | None = None,
 ) -> CoAPAdapter:
     """Создать CoAPAdapter с изолированными mock-зависимостями."""
-    adapter = CoAPAdapter()
+    adapter = CoAPAdapter(config)
     if bus is None:
         mock_bus = MagicMock()
+        mock_bus._config = config
         mock_bus.publish = AsyncMock()
         mock_bus.subscribe = MagicMock(return_value=MagicMock())
         mock_bus.unsubscribe = MagicMock()
@@ -185,9 +199,9 @@ def coap_request(payload: bytes = b"") -> CoAPMessage:
 
 
 @pytest.fixture
-def mock_adapter() -> CoAPAdapter:
+def mock_adapter(config: YAMLConfigLoader) -> CoAPAdapter:
     """CoAP-адаптер с mock-шиной (для тестов без реальной шины)."""
-    return _make_adapter()
+    return _make_adapter(config)
 
 
 @pytest.fixture
@@ -209,8 +223,12 @@ def coap_health(mock_adapter: CoAPAdapter) -> _HealthResource:
 
 
 @pytest.fixture
-def mqtt_adapter(running_bus: MessageBus, registry: DeviceRegistry):
+def mqtt_adapter(
+    config: YAMLConfigLoader,
+    running_bus: MessageBus,
+    registry: DeviceRegistry
+):
     """MQTT-адаптер для тестов."""
-    adapter = MQTTAdapter()
+    adapter = MQTTAdapter(config)
     adapter.set_gateway_context(running_bus, registry)
     yield adapter

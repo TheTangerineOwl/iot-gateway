@@ -2,6 +2,7 @@
 import pytest
 import pytest_asyncio
 import asyncio
+from config.config import YAMLConfigLoader
 from core.message_bus import MessageBus
 from core.pipeline.pipeline import Pipeline
 from core.pipeline.stages import ValidationStage
@@ -12,7 +13,7 @@ from models.message import Message
 @pytest_asyncio.fixture
 async def full_flow(mock_storage):
     """Полный поток работы шлюза."""
-    bus = MessageBus(max_queue=100)
+    bus = MessageBus(YAMLConfigLoader())
     await bus.start()
 
     pipeline = Pipeline()

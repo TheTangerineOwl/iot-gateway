@@ -14,6 +14,7 @@ import json
 import logging
 from typenv import Env
 from typing import Any
+from config.config import YAMLConfigLoader
 from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
@@ -27,28 +28,37 @@ logger = logging.getLogger(__name__)
 class HTTPAdapter(ProtocolAdapter):
     """Адаптер для протокола HTTP."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: YAMLConfigLoader) -> None:
         """Адаптер для протокола HTTP."""
-        super().__init__()
-        self._host = env.str('HTTP_HOST', default='0.0.0.0')
-        self._port = env.int('HTTP_PORT', default=8081)
-        self._root_url = env.str('HTTP_URL_ROOT', default='/api/v1')
-        self._wh_telemetry = self._root_url + env.str(
-            'HTTP_URL_TELEMETRY',
-            default='/ingest'
+        super().__init__(config)
+        self._adapter_config = self._config.get_adapter_config(
+            self.protocol_name.lower()
         )
-        self._url_register = self._root_url + env.str(
-            'HTTP_URL_REGISTER',
-            default='/devices/register'
+        # self._config: dict[str, Any] = get_conf('adapters.http', {})
+        self._host: str = self._adapter_config.get('host', '0.0.0.0')
+        self._port: int = self._adapter_config.get('post', 8081)
+
+        self._root_url: str = self._adapter_config.get('url_root', '/api/v1')
+        self._endpoints: dict[str, str] = self._adapter_config.get(
+            'endpoints',
+            {}
         )
-        self._url_health = self._root_url + env.str(
-            'HTTP_URL_HEALTH',
-            default='/health'
+        self._wh_telemetry: str = (
+            self._root_url
+            + self._endpoints.get('telemetry', '/ingest')
+        )
+        self._url_register: str = (
+            self._root_url
+            + self._endpoints.get('register', '/devices/register')
+        )
+        self._url_health: str = (
+            self._root_url
+            + self._endpoints.get('health', '/heatlh')
         )
 
         self._app: web.Application | None = None
         self._runner: web.AppRunner | None = None
-        self._timeout: float = 2.0
+        self._timeout: float = self._adapter_config.get('timeout_reject', 0.5)
 
     @property
     def protocol_type(self) -> ProtocolType:

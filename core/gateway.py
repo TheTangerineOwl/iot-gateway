@@ -3,7 +3,7 @@ import asyncio
 import logging
 import signal
 from typing import Any
-from typenv import Env
+from config.config import get_conf, YAMLConfigLoader
 from core.registry import DeviceRegistry
 from core.message_bus import MessageBus
 from core.pipeline.pipeline import Pipeline
@@ -22,37 +22,39 @@ from protocols.adapters.http_adapter import HTTPAdapter
 from protocols.adapters.websocket_adapter import WebSocketAdapter
 from protocols.adapters.mqtt_adapter import MQTTAdapter
 
-env = Env(upper=True)
+# env = Env(upper=True)
 logger = logging.getLogger(__name__)
 
 
 class Gateway:
     """Основной модуль работы шлюза."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: YAMLConfigLoader) -> None:
         """Основной модуль работы шлюза."""
+        self._config = config
         self._adapters: dict[ProtocolType, ProtocolAdapter] = {}
         self._running = False
 
-        self._bus = MessageBus(
-            max_queue=env.int('MESQ_MAX_LEN', default=10000)
-        )
+        self._bus = MessageBus(self._config)
 
         self._registry = DeviceRegistry(
-            max_devices=env.int('DEVICES_MAX', default=1000),
-            stale_timeout=env.float('DEVICES_TIMEOUT_STALE', default=30.0 * 4)
+            max_devices=int(get_conf(
+                self._config,
+                'gateway.registry.max_devices',
+                default=1000
+            )),
+            stale_timeout=float(get_conf(
+                self._config,
+                'gateway.registry.timeout_stale',
+                default=30.0 * 4
+            ))
         )
 
         self._pipeline = self._build_pipeline()
         self._storage = self._link_storage()
         self._storage_subscriber = StorageSubscriber(self._storage)
 
-        self._reg_adapters(
-            HTTPAdapter(),
-            WebSocketAdapter(),
-            CoAPAdapter(),
-            MQTTAdapter()
-        )
+        self._reg_adapters()
 
     @property
     def is_running(self) -> bool:
@@ -61,34 +63,80 @@ class Gateway:
 
     def _link_storage(self) -> StorageBase:
         """Подключить корректное хранилище на основе env."""
-        prefix = env.str('STORAGE_TYPE', default='sqlite')
+        prefix = get_conf(
+            self._config,
+            'gateway.general.storage_type',
+            default='sqlite'
+        )
         if prefix == 'postgresql' or prefix == 'postgres':
+            username = get_conf(
+                self._config,
+                'storage.postgresql.user.username',
+                'admin'
+            )
+            password = get_conf(
+                self._config,
+                'storage.postgresql.user.password',
+                'password'
+            )
+            host = get_conf(
+                self._config,
+                'storage.postgresql.address.host',
+                'localhost'
+            )
+            port = int(get_conf(
+                self._config,
+                'storage.postgresql.address.port',
+                5432
+            ))
+            dbname = get_conf(
+                self._config,
+                'storage.postgresql.dbname',
+                'iotgateway'
+            )
+            app_name = get_conf(
+                self._config,
+                'storage.postgresql.app_name',
+                'gateway'
+            )
             return PostgresStorage(
-                connstr=env.str(
-                    'STORAGE_DB_CONNSTR',
-                    default='postgresql://admin:password'
-                            '@localhost:5432/iotgateway'
-                            '?application_name=gateway'
-                )
+                connstr=f'postgresql://{username}:{password}'
+                        f'@{host}:{port}/{dbname}'
+                        f'?application_name={app_name}'
             )
         if prefix == 'sqlite' or prefix == 'aiosqlite':
             return SQLiteStorage(
-                db_path=env.str(
-                    'STORAGE_DB_CONNSTR',
-                    default='data/telemetry.db'
+                db_path=get_conf(
+                    self._config,
+                    'storage.sqlite.dbpath',
+                    ''
                 )
             )
         return SQLiteStorage(
-            db_path=env.str(
-                'STORAGE_DB_CONNSTR',
-                default='data/telemetry.db'
+            db_path=get_conf(
+                self._config,
+                'storage.sqlite.dbpath',
+                ''
             )
         )
 
-    def _reg_adapters(self, *args: ProtocolAdapter) -> None:
+    def _reg_adapters(self) -> None:
         """Регистрирует все переданные адаптеры."""
-        for ad in args:
-            self.register_adapter(ad)
+        adapter_types: dict[str, type[ProtocolAdapter]] = {
+            'HTTP': HTTPAdapter,
+            'CoAP': CoAPAdapter,
+            'WebSocket': WebSocketAdapter,
+            'MQTT': MQTTAdapter
+        }
+        for name, builder in adapter_types.items():
+            if get_conf(
+                self._config,
+                f'adapters.{name.lower()}.enabled',
+                False
+            ):
+                self.register_adapter(builder(self._config))
+            else:
+                logger.info(f'Adapter {name} disabled in config')
 
     def _build_pipeline(self) -> Pipeline:
         """Построить конвейер обработки сообщений."""
@@ -168,7 +216,11 @@ class Gateway:
         await self._pipeline.setup()
 
         await self._registry.start_monitor(
-            check_interval=env.float('DEVICES_CHECK_INTERVAL', default=30.0)
+            check_interval=float(get_conf(
+                self._config,
+                'gateway.registry.check_interval',
+                30.0
+            ))
         )
 
         for name, adapter in self._adapters.items():
@@ -267,8 +319,16 @@ class Gateway:
         """Статус работы шлюза."""
         return {
             "gateway": {
-                "id": env.int('GATEWAY_ID', default=1),
-                "name": env.str('GATEWAY_NAME', default='IoT Gateway'),
+                "id": get_conf(
+                    self._config,
+                    'gateway.general.id',
+                    1
+                ),
+                "name": get_conf(
+                    self._config,
+                    'gateway.general.name',
+                    1
+                ),
                 "running": self._running,
             },
             "devices": {

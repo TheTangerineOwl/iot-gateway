@@ -498,9 +498,12 @@ class TestIngestResource:
         """Внутренние ошибки при публикации."""
 
         @pytest.mark.asyncio
-        async def test_bus_not_connected_returns_internal_error(self):
+        async def test_bus_not_connected_returns_internal_error(
+            self,
+            config
+        ):
             """Шина не подключена вернет INTERNAL_SERVER_ERROR."""
-            coap_adapter = CoAPAdapter()   # без set_gateway_context
+            coap_adapter = CoAPAdapter(config)   # без set_gateway_context
             ingest = _IngestResource(coap_adapter)
             req = coap_request(
                 json_payload({"device_id": "dev-1"})
