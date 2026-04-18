@@ -13,10 +13,10 @@ def temp_config_dir(tmp_path):
     config_dir = Path(tmp_path)
 
     gateway_dir = config_dir / 'gateway'
-    gateway_dir.mkdir(parents=True, mode=666, exist_ok=True)
+    gateway_dir.mkdir(parents=True, mode=0o777, exist_ok=True)
     gateway_yml = gateway_dir / "default.yml"
 
-    gateway_yml.touch(666, exist_ok=True)
+    gateway_yml.touch(0o666, exist_ok=True)
     gateway_yml.write_text(
         """
 logging:
@@ -30,10 +30,10 @@ general:
     )
 
     http_dir = config_dir / "adapters" / "http"
-    http_dir.mkdir(parents=True, mode=666, exist_ok=True)
+    http_dir.mkdir(parents=True, mode=0o777, exist_ok=True)
 
     default_http = http_dir / "default.yaml"
-    default_http.touch(666, exist_ok=True)
+    default_http.touch(0o666, exist_ok=True)
     default_http.write_text("""
 enabled: true
 host: 0.0.0.0
@@ -47,17 +47,17 @@ timeout_reject: 0.5
 """)
 
     running_http = http_dir / "running.yaml"
-    running_http.touch(666, exist_ok=True)
+    running_http.touch(0o666, exist_ok=True)
     running_http.write_text("""
 port: 8082
 debug: true
 """)
 
     sqlite_dir = config_dir / "storage" / "sqlite"
-    sqlite_dir.mkdir(parents=True, mode=666, exist_ok=True)
+    sqlite_dir.mkdir(parents=True, mode=0o777, exist_ok=True)
 
     default_sqlite = sqlite_dir / "default.yaml"
-    default_sqlite.touch(666, exist_ok=True)
+    default_sqlite.touch(0o666, exist_ok=True)
     default_sqlite.write_text("""
 enabled: true
 path: ./data/app.db
@@ -75,8 +75,8 @@ def temp_config_empty_dir(tmp_path):
     config_dir = Path(tmp_path) / "empty"
 
     empty_yml = config_dir / "default.yml"
-    config_dir.mkdir(mode=666, parents=True, exist_ok=True)
-    empty_yml.touch(666, exist_ok=True)
+    config_dir.mkdir(mode=0o777, parents=True, exist_ok=True)
+    empty_yml.touch(0o666, exist_ok=True)
 
     yield config_dir
 
