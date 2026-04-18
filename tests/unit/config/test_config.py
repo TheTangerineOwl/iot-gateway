@@ -72,7 +72,7 @@ journal_mode: WAL
 @pytest.fixture
 def temp_config_empty_dir(tmp_path):
     """Папка с пустым конфигом."""
-    config_dir = Path(tmp_path)
+    config_dir = Path(tmp_path) / "empty"
 
     empty_yml = config_dir / "default.yml"
     config_dir.mkdir(mode=666, parents=True, exist_ok=True)
