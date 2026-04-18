@@ -18,10 +18,10 @@ def temp_config_dir():
         config_dir = Path(tmpdir)
 
         gateway_dir = config_dir / 'gateway'
-        gateway_dir.mkdir(parents=True)
+        gateway_dir.mkdir(parents=True, mode=666)
         gateway_yml = gateway_dir / "default.yml"
 
-        gateway_yml.touch(666)
+        # gateway_yml.touch(666)
         gateway_yml.write_text(
             """
 logging:
@@ -35,7 +35,7 @@ general:
         )
 
         http_dir = config_dir / "adapters" / "http"
-        http_dir.mkdir(parents=True)
+        http_dir.mkdir(parents=True, mode=666)
 
         default_http = http_dir / "default.yaml"
         default_http.touch(666)
@@ -59,7 +59,7 @@ debug: true
 """)
 
         sqlite_dir = config_dir / "storage" / "sqlite"
-        sqlite_dir.mkdir(parents=True)
+        sqlite_dir.mkdir(parents=True, mode=666)
 
         default_sqlite = sqlite_dir / "default.yaml"
         default_sqlite.touch(666)

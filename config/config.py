@@ -178,6 +178,9 @@ class YAMLConfigLoader:
         except IOError as exc:
             logger.exception(f'Error reading file {file_path}: {exc}')
             raise
+        except PermissionError as exc:
+            logger.exception('Permission error: ', exc)
+            raise
 
     def _scan_directory(
         self,
