@@ -1,15 +1,16 @@
 """Точка входа в приложение шлюза."""
 import asyncio
-from datetime import datetime
 import logging
 from pathlib import Path
 from sys import exit, platform
+from typenv import Env
+from config.config import load_configuration, load_env
 from core.gateway import Gateway
-from config.config import load_env, get_log_severity
 
 
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / '.env'
+CONFIG_PATH = BASE_DIR / 'config' / 'configuration'
 
 
 async def main():
@@ -21,20 +22,14 @@ async def main():
     """
     load_env(ENV_PATH)
 
-    logging.basicConfig(
-        filename=f'logs/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log',
-        filemode='w',
-        encoding='utf-8',
-        format="%(asctime)s │ %(levelname)-7s │ %(name)-30s │ %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        level=get_log_severity()
-    )
-    logging.getLogger('aiohttp').setLevel(logging.WARNING)
-    logging.getLogger('asyncio').setLevel(logging.WARNING)
-    logging.getLogger('aiosqlite').setLevel(logging.WARNING)
-    logging.getLogger('coap-server').setLevel(logging.WARNING)
+    env = Env(upper=True)
 
-    gateway = Gateway()
+    config = load_configuration(
+        config_folder=CONFIG_PATH,
+        env=env
+    )
+
+    gateway = Gateway(config)
     await gateway.run_forever()
 
 

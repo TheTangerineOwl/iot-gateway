@@ -5,15 +5,14 @@ import aiocoap.resource as resource
 from aiocoap.numbers.contentformat import ContentFormat
 import json
 import logging
-from typenv import Env
 from typing import Any
+from config.config import YAMLConfigLoader
 from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
 from protocols.message_builder import MessageBuilder
 
 
-env = Env(upper=True)
 logger = logging.getLogger(__name__)
 
 
@@ -199,29 +198,49 @@ class CoAPAdapter(ProtocolAdapter):
     Поднимает aiocoap-сервер.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, config: YAMLConfigLoader) -> None:
         """Инициализировать CoAP-адаптер, прочитав настройки из env."""
-        super().__init__()
-        self._host: str = env.str('COAP_HOST', default='0.0.0.0')
-        self._port: int = env.int('COAP_PORT', default=5683)
-
-        self._root_url: str = env.str('COAP_URL_ROOT', default='/api/v1/coap')
-
-        self._url_ingest: str = self._root_url + env.str(
-            'COAP_URL_TELEMETRY', default='/ingest'
+        super().__init__(config)
+        self._config = config
+        self._adapter_config: dict[str, Any] = self._config.get_adapter_config(
+            self.protocol_name.lower()
         )
-        self._url_register: str = self._root_url + env.str(
-            'COAP_URL_REGISTER', default='/devices/register'
+        self._host: str = self._adapter_config.get(
+            'host',
+            '0.0.0.0'
         )
-        self._url_health: str = self._root_url + env.str(
-            'COAP_URL_HEALTH', default='/health'
+        self._port: int = self._adapter_config.get(
+            'post',
+            5683
+        )
+
+        self._root_url: str = self._adapter_config.get(
+            'url_root',
+            '/api/v1/coap'
+        )
+        self._endpoints: dict[str, str] = self._adapter_config.get(
+            'endpoints',
+            {}
+        )
+        self._url_ingest: str = (
+            self._root_url
+            + self._endpoints.get('telemetry', '/ingest')
+        )
+        self._url_register: str = (
+            self._root_url
+            + self._endpoints.get('register', '/devices/register')
+        )
+        self._url_health: str = (
+            self._root_url
+            + self._endpoints.get('health', '/heatlh')
         )
 
         self._context: aiocoap.Context | None = None
         self._serve_task: asyncio.Task | None = None
 
-        self._timeout_reject: float = env.float(
-            'COAP_TIMEOUT_REJECT', default=1.0
+        self._timeout_reject: float = self._adapter_config.get(
+            'timeout_reject',
+            0.5
         )
 
     @property

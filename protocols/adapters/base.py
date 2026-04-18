@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import asyncio
 import logging
 from typing import Any
+from config.config import YAMLConfigLoader
 from models.message import Message
 from models.device import ProtocolType
 from core.message_bus import MessageBus
@@ -15,8 +16,9 @@ logger = logging.getLogger(__name__)
 class ProtocolAdapter(ABC):
     """Абстрактный класс для адаптеров протоколов."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: YAMLConfigLoader) -> None:
         """Конструктор адаптера."""
+        self._config: YAMLConfigLoader = config
         self._bus: MessageBus | None = None
         self._registry: DeviceRegistry | None = None
         self._running = False

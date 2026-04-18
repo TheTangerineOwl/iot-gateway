@@ -4,11 +4,10 @@ from fnmatch import fnmatch
 from dataclasses import dataclass
 import logging
 from models.message import Message
-from typenv import Env
 from typing import Any, Callable, Coroutine
+from config.config import get_conf, YAMLConfigLoader
 
 
-env = Env(upper=True)
 logger = logging.getLogger(__name__)
 
 
@@ -33,10 +32,15 @@ class Subscription:
 class MessageBus:
     """Шина сообщений для взаимодействия модулей."""
 
-    def __init__(self, max_queue: int = 10000):
+    def __init__(self, config: YAMLConfigLoader):
         """Шина сообщений."""
+        self._config = config
         self._queue: asyncio.Queue[tuple[str, Message]] = asyncio.Queue(
-            maxsize=max_queue
+            maxsize=int(get_conf(
+                self._config,
+                'gateway.message_bus.max_queue',
+                10000
+            ))
         )
         self._subscriptions: list[Subscription] = []
         self._running = False
@@ -125,7 +129,12 @@ class MessageBus:
             try:
                 topic, message = await asyncio.wait_for(
                     self._queue.get(),
-                    timeout=env.float('MESQ_TIMEOUT', default=1.0)
+                    # timeout=env.float('MESQ_TIMEOUT', default=1.0)
+                    timeout=float(get_conf(
+                        self._config,
+                        'gateway.message_bus.timeout',
+                        1.0
+                    ))
                 )
             except asyncio.TimeoutError:
                 continue
