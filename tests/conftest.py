@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 import psycopg
 from unittest.mock import AsyncMock
+from config.config import YAMLConfigLoader
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from core.pipeline.pipeline import Pipeline
@@ -71,6 +72,8 @@ def supress_loggers():
     bus_logger = logging.getLogger('core.message_bus')
     bus_logger.setLevel(logging.ERROR)
     bus_logger.propagate = False
+    asyncio_logger = logging.getLogger('asyncio')
+    asyncio_logger.setLevel(logging.WARNING)
 
 
 def pytest_configure(config):
@@ -114,6 +117,14 @@ async def drain(bus: MessageBus) -> None:
         await asyncio.sleep(0)
 
 
+@pytest.fixture(scope='session')
+def config():
+    """Возвращает пустой конфиг."""
+    loader = YAMLConfigLoader()
+    loader.config = {'gateway': {'message_bus': {'max_queue': BUS_MAX_QUEUE}}}
+    yield loader
+
+
 @pytest.fixture
 def registry():
     """Реестр с маленьким лимитом устройств и долгим stale-таймаутом."""
@@ -138,9 +149,9 @@ def device():
 
 
 @pytest_asyncio.fixture
-async def running_bus():
+async def running_bus(config):
     """Рабочая шина."""
-    bus = MessageBus(max_queue=BUS_MAX_QUEUE)
+    bus = MessageBus(config)
     await bus.start()
     yield bus
     await bus.stop()

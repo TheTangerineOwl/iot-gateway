@@ -1,27 +1,26 @@
-mqtt:
-  enabled: true
-  client_id: iot-gateway
-  broker:
-    host: 0.0.0.0
-    port: 1883
-  auth:
-    username:
-    password:
-  tls:
-    use: false
-    ca_certs:
-    certfile:
-    keyfile:
-  keepalive: 60
-  qos: 1
-  clean_session: true
-  reconnect_delay: 5
-  max_reconnect_delay: 300
-  timeout_reject: 2.0
-  topics:
-    devices:
-      base: devices/+
-      register: devices/+/register
-      status: devices/+/status
-      command: devices/+/command
-      command_response: devices/+/command/response
+enabled: true
+client_id: iot-gateway
+broker:
+  host: 0.0.0.0
+  port: 1883
+auth:
+  username:
+  password:
+tls:
+  use: false
+  ca_certs:
+  certfile:
+  keyfile:
+keepalive: 60
+qos: 1
+clean_session: true
+reconnect_delay: 5
+max_reconnect_delay: 300
+timeout_reject: 2.0
+topics:
+  devices:
+    base: devices/+
+    register: devices/+/register
+    status: devices/+/status
+    command: devices/+/command
+    command_response: devices/+/command/response

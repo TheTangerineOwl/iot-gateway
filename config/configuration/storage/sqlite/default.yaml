@@ -1,2 +1,1 @@
-sqlite:
-  db_path: data/telemetry.db
+dbpath: data/telemetry.db

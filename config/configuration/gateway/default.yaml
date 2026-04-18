@@ -2,6 +2,7 @@ general:
   id: 1
   name: IoT Gateway
   allowed_hosts: ['localhost', '127.0.0.1']
+  storage_type: sqlite
 registry:
   max_devices: 1000
   timeout_stale: 120.0

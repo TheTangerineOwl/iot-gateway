@@ -14,6 +14,7 @@ import logging
 from http import HTTPStatus
 from typenv import Env
 from typing import Any
+from config.config import YAMLConfigLoader
 from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
@@ -27,29 +28,49 @@ logger = logging.getLogger(__name__)
 class WebSocketAdapter(ProtocolAdapter):
     """Адаптер для протокола WebSocket."""
 
-    def __init__(self, heartbeat: float | None = 30.0) -> None:
+    def __init__(self, config: YAMLConfigLoader) -> None:
         """Адаптер для протокола WebSocket."""
-        super().__init__()
-
-        self._host: str = env.str('WS_HOST', default='0.0.0.0')
-        self._port: int = env.int('WS_PORT', default=8082)
-        self._root_url: str = env.str('WS_URL_ROOT', default='/api/v1/ws')
-
-        self._url_ws_telemetry: str = self._root_url + env.str(
-            'WS_URL_WS', default='/ingest'
+        super().__init__(config)
+        self._adapter_config: dict[str, Any] = self._config.get_adapter_config(
+            self.protocol_name.lower()
         )
-        self._url_register: str = self._root_url + env.str(
-            'WS_URL_REGISTER', default='/register'
+        self._host: str = self._adapter_config.get(
+            'host',
+            '0.0.0.0'
         )
-        self._url_health: str = self._root_url + env.str(
-            'WS_URL_HEALTH', default='/health'
+        self._port: int = self._adapter_config.get(
+            'post',
+            8082
+        )
+
+        self._root_url: str = self._adapter_config.get(
+            'url_root',
+            '/api/v1/ws'
+        )
+        self._endpoints: dict[str, str] = self._adapter_config.get(
+            'endpoints',
+            {}
+        )
+        self._url_ws_telemetry: str = (
+            self._root_url
+            + self._endpoints.get('telemetry', '/ingest')
+        )
+        self._url_register: str = (
+            self._root_url
+            + self._endpoints.get('register', '/devices/register')
+        )
+        self._url_health: str = (
+            self._root_url
+            + self._endpoints.get('health', '/heatlh')
         )
 
         self._connections: dict[str, web.WebSocketResponse] = {}
         self._app: web.Application | None = None
         self._runner: web.AppRunner | None = None
 
-        self._heartbeat = heartbeat
+        self._heartbeat: float = float(self._adapter_config.get(
+            'heartbeat', 30.0
+        ))
 
     @property
     def protocol_type(self) -> ProtocolType:

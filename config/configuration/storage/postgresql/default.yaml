@@ -1,9 +1,8 @@
-postgresql:
-  user:
-    username: admin
-    password: password
-  address:
-    host: localhost
-    port: 5432
-  dbname: iotgateway
-  app_name: gateway
+user:
+  username: admin
+  password: password
+address:
+  host: localhost
+  port: 5432
+dbname: iotgateway
+app_name: gateway

@@ -267,7 +267,9 @@ class TestMergeEnv:
             'adapters': {'http': {'host': '0.0.0.0', 'port': 8080}},
         }
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert result['adapters']['http']['host'] == '127.0.0.1'
         assert result['adapters']['http']['port'] == 8080  # unchanged
 
@@ -277,7 +279,9 @@ class TestMergeEnv:
 
         yaml_config = {'adapters': {'http': {'port': 8080}}}
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert result['adapters']['http']['port'] == 9000
         assert isinstance(result['adapters']['http']['port'], int)
 
@@ -287,7 +291,9 @@ class TestMergeEnv:
 
         yaml_config = {'gateway': {'logging': {'debug': False}}}
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert result['gateway']['logging']['debug'] is True
 
     def test_merge_bool_values_yes(self, mock_env):
@@ -296,7 +302,9 @@ class TestMergeEnv:
 
         yaml_config = {'gateway': {'logging': {'debug': False}}}
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert result['gateway']['logging']['debug'] is True
 
     def test_merge_bool_false_values(self, mock_env):
@@ -305,7 +313,9 @@ class TestMergeEnv:
 
         yaml_config = {'gateway': {'logging': {'debug': True}}}
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert result['gateway']['logging']['debug'] is False
 
     def test_merge_float_values(self, mock_env):
@@ -314,7 +324,9 @@ class TestMergeEnv:
 
         yaml_config = {'adapters': {'http': {'timeout': 1.5}}}
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert result['adapters']['http']['timeout'] == 2.5
         assert isinstance(result['adapters']['http']['timeout'], float)
 
@@ -325,7 +337,9 @@ class TestMergeEnv:
         yaml_config = {'adapters': {'http': {'port': 8080}}}
         original_port = yaml_config['adapters']['http']['port']
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert yaml_config['adapters']['http']['port'] == original_port
         assert result['adapters']['http']['port'] == 9000
 
@@ -335,7 +349,9 @@ class TestMergeEnv:
         env = MagicMock()
         env.str = MagicMock(return_value=None)
 
-        result = YAMLConfigLoader.merge_env(yaml_config, env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, env)
         assert result == {}
 
     def test_merge_deeply_nested(self, mock_env):
@@ -355,7 +371,9 @@ class TestMergeEnv:
             }
         }
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert (
             result['adapters']['http']['endpoints']['telemetry']
             == '/v2/ingest'
@@ -378,7 +396,9 @@ class TestMergeEnv:
             'adapters': {'http': {'host': '0.0.0.0', 'port': 8081}},
         }
 
-        result = YAMLConfigLoader.merge_env(yaml_config, mock_env)
+        loader = YAMLConfigLoader()
+        loader.config = yaml_config
+        result = loader.merge_env(yaml_config, mock_env)
         assert result['gateway']['logging']['level'] == 'DEBUG'
         assert result['adapters']['http']['port'] == 9000
         assert result['adapters']['http']['host'] == '127.0.0.1'
@@ -396,7 +416,7 @@ class TestIntegration:
 
         loader = YAMLConfigLoader(str(temp_config_dir))
         config = loader.load()
-        merged = YAMLConfigLoader.merge_env(config, mock_env)
+        merged = loader.merge_env(config, mock_env)
 
         assert merged['adapters']['http']['port'] == 9090
         assert merged['storage']['sqlite']['timeout'] == 10

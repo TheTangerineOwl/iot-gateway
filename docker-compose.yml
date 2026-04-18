@@ -4,15 +4,15 @@ services:
     container_name: iot-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER:     ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB:       ${POSTGRES_DB:-iotgateway}
+      POSTGRES_USER:     ${STORAGE__POSTGRESQL__USER__USERNAME:-admin}
+      POSTGRES_PASSWORD: ${STORAGE__POSTGRESQL__USER__PASSWORD:-password}
+      POSTGRES_DB:       ${STORAGE__POSTGRESQL__DBNAME:-iotgateway}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-iotgateway}"]
+      test: ["CMD-SHELL", "pg_isready -U ${STORAGE__POSTGRESQL__USER__USERNAME:-admin} -d ${STORAGE__POSTGRESQL__DBNAME:-iotgateway}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,15 +35,15 @@ services:
 
       STORAGE_TYPE: postgresql
       STORAGE_DB_CONNSTR: >-
-        postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}
-        @postgres:5432/${POSTGRES_DB:-iotgateway}?application_name=gateway
+        postgresql://${STORAGE__POSTGRESQL__USER__USERNAME:-admin}:${STORAGE__POSTGRESQL__USER__PASSWORD:-password}
+        @postgres:5432/${STORAGE__POSTGRESQL__DBNAME:-iotgateway}?application_name=STORAGE__POSTGRESQL__APP_NAME
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data  # на случай fallback на SQLite
     ports:
-      - "${HTTP_PORT:-8081}:8081"  # HTTP
-      - "${WS_PORT:-8082}:8082"  # WebSocket
-      - "${COAP_PORT:-5683}:5683/udp" # CoAP (UDP)
+      - "${ADAPTERS__HTTP__PORT:-8081}:8081"  # HTTP
+      - "${ADAPTERS__WEBSOCKET__PORT:-8082}:8082"  # WebSocket
+      - "${ADAPTERS__COAP__PORT:-5683}:5683/udp" # CoAP (UDP)
     networks:
       - iot-net
 

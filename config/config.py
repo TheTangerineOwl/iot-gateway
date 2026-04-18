@@ -19,21 +19,6 @@ SEV_DICT = {
 LOG_DEFAULT = logging.INFO
 
 
-def get_log_severity_env() -> str | int:
-    """Получить уровень логирования из окружения."""
-    debug = env.bool('DEBUG', default=False)
-    if debug:
-        # return logging.DEBUG
-        return 0
-    level = str(env.str('LOG_SEVERITY', default=str(LOG_DEFAULT))).upper()
-    if level.isalpha():
-        level_num = SEV_DICT.get(level, LOG_DEFAULT)
-        return level_num
-    if level.isnumeric():
-        return int(level)
-    return LOG_DEFAULT
-
-
 def load_env(env_path: str = '.env') -> None:
     """Загрузить переменные окружения из указанного файла."""
     try:
@@ -53,7 +38,8 @@ _LOGGERS_TO_SUPRESS: set[str] = {
 }
 
 
-def supress_loggers(level: int | str):
+def _supress_loggers(level: int | str):
+    """Подавляет вывод логгеров."""
     for lib in _LOGGERS_TO_SUPRESS:
         logging.getLogger(lib).setLevel(level)
 
@@ -64,7 +50,7 @@ def setup_logging(config: Dict[str, Any]) -> None:
 
     level = str(logging_config.get('level', 'INFO')).upper()
     debug = logging_config.get('debug', False)
-    dir = logging_config.get('dir', 'logs/')
+    dir = Path(logging_config.get('dir', 'logs/')).resolve()
 
     if debug:
         level_num = 0
@@ -81,7 +67,7 @@ def setup_logging(config: Dict[str, Any]) -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
         level=level_num
     )
-    supress_loggers(logging.WARNING)
+    _supress_loggers(logging.WARNING)
 
 
 class YAMLConfigLoader:
@@ -91,8 +77,8 @@ class YAMLConfigLoader:
         """Инициализировать конфигуратор."""
         self.config_folder = Path(folder)
         self.config: Dict[str, Any] = {}
-        self._adapter_configs: Dict[str, Dict[str, Any]]
-        self._storage_configs: Dict[str, Dict[str, Any]]
+        self._adapter_configs: Dict[str, Dict[str, Any]] = {}
+        self._storage_configs: Dict[str, Dict[str, Any]] = {}
 
     def _set_nested_dict(
         self,
@@ -121,8 +107,9 @@ class YAMLConfigLoader:
         else:
             current[final_key] = value
 
-    @staticmethod
+    @classmethod
     def _merge_configs(
+        cls,
         target: Dict[str, Any],
         source: Dict[str, Any]
     ) -> None:
@@ -207,17 +194,13 @@ class YAMLConfigLoader:
         files = [f for f in entries if f.is_file()]
         dirs = [d for d in entries if d.is_dir()]
 
-        # for file_path in files:
-        #     if file_path.suffix.lower() in ['.yaml', '.yml']:
-        #         self._load_yaml_file(file_path, parent_key)
-
         running = None
         default = None
         for file_path in files:
-            name = file_path.name.lower()
-            if name in ['running.yaml', 'running.yml']:
+            name = file_path.stem.lower()
+            if name == 'running':
                 running = file_path
-            elif name in ['default.yaml', 'default.yml']:
+            elif name in 'default':
                 default = file_path
         if default is not None:
             self._load_yaml_file(default, parent_key)
@@ -272,29 +255,32 @@ class YAMLConfigLoader:
         """Получить конфигурацию хранилища."""
         return self._storage_configs.get(storage_type, {})
 
-    @staticmethod
-    def _deep_copy(obj: Any) -> Any:
+    @classmethod
+    def _deep_copy(cls, obj: Any) -> Any:
         if isinstance(obj, dict):
-            return {k: YAMLConfigLoader._deep_copy(v) for k, v in obj.items()}
+            return {k: cls._deep_copy(v) for k, v in obj.items()}
         elif isinstance(obj, list):
-            return [YAMLConfigLoader._deep_copy(item) for item in obj]
+            return [cls._deep_copy(item) for item in obj]
         else:
             return obj
 
-    @staticmethod
+    @classmethod
     def _parse_env_from_suffix(
+        cls,
         env: Env,
         env_var: str,
         expected_types: list[type]
     ) -> Any:
         """Распарсить env var."""
         try:
-            env_str = env.str(env_var)
+            logger.debug(f'Parsing {env_var}, types = {expected_types}')
+
+            env_str = env.str(env_var, default=None)
             if not env_str:
                 return None
 
             if int in expected_types:
-                value_int = env.int(env_var)
+                value_int = env.int(env_var, default=None)
                 if value_int is not None:
                     logger.debug(f'Converted {env_var} to {value_int}')
                     return value_int
@@ -303,21 +289,21 @@ class YAMLConfigLoader:
                     return True
                 if env_str.lower() in ['false', 'no', '0']:
                     return False
-                value_bool = env.bool(env_var)
+                value_bool = env.bool(env_var, default=None)
                 if value_bool is not None:
                     logger.debug(f'Converted {env_var} to {value_bool}')
                     return value_bool
             if float in expected_types:
-                value_float = env.float(env_var)
+                value_float = env.float(env_var, default=None)
                 if value_float is not None:
                     logger.debug(f'Converted {env_var} to {value_float}')
                     return value_float
 
             if list in expected_types:
-                env_list = env.list(env_var)
+                env_list = env.list(env_var, default=None)
                 if env_list is not None:
-                    logger.debug(f'Converted {env_var} to {value_float}')
-                    return value_float
+                    logger.debug(f'Converted {env_var} to {env_list}')
+                    return env_list
 
             return env_str
         except Exception as exc:
@@ -327,8 +313,9 @@ class YAMLConfigLoader:
             )
             return env_str
 
-    @staticmethod
+    @classmethod
     def _merge_env_recursive(
+        cls,
         config: Dict[str, Any],
         env: Env,
         path: list
@@ -368,8 +355,7 @@ class YAMLConfigLoader:
                         f'{env_var_name}__: {exc}'
                     )
 
-    @staticmethod
-    def merge_env(yaml_config: dict, env: Env) -> dict:
+    def merge_env(self, yaml_config: dict, env: Env) -> dict:
         """Переопределить конфигурацию из YAML значениями из env."""
         result = YAMLConfigLoader._deep_copy(yaml_config)
         YAMLConfigLoader._merge_env_recursive(
@@ -377,13 +363,18 @@ class YAMLConfigLoader:
             env,
             []
         )
+
+        self.config = result
+        self._adapter_configs = self.config.get('adapters', {})
+        self._storage_configs = self.config.get('storage', {})
+
         return result
 
 
 def load_configuration(
     config_folder: str = 'configuration',
     env: Optional[Env] = None,
-) -> Dict[str, Any]:
+) -> YAMLConfigLoader:
     """
     Загрузить полную конфигурацию из YAML и переменных окружения.
 
@@ -393,11 +384,36 @@ def load_configuration(
     3. Настраивает логирование
     """
     loader = YAMLConfigLoader(config_folder)
+
+    loader.config_folder = Path(config_folder)
+
     config = loader.load()
 
     if env is not None:
-        config = YAMLConfigLoader.merge_env(config, env)
+        config = loader.merge_env(config, env)
 
     setup_logging(config)
 
-    return config
+    return loader
+
+
+def _get_conf_rec(keys: list[str], cdict: Dict[str, Any] | None):
+    if cdict is None:
+        return None
+    if len(keys) == 0:
+        return cdict
+    nest = cdict.get(keys[0])
+    return _get_conf_rec(keys[1:], nest)
+
+
+def get_conf(
+    conf: YAMLConfigLoader,
+    key: str,
+    default: Any | None = None
+):
+    """Получить значение по комбинации ключей."""
+    keys = key.lower().split('.')
+    value = _get_conf_rec(keys, conf.config)
+    if value is None:
+        return default
+    return value
