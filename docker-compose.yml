@@ -44,6 +44,7 @@ services:
       - "${ADAPTERS__HTTP__PORT:-8081}:8081"  # HTTP
       - "${ADAPTERS__WEBSOCKET__PORT:-8082}:8082"  # WebSocket
       - "${ADAPTERS__COAP__PORT:-5683}:5683/udp" # CoAP (UDP)
+      - "${ADAPTERS__MQTT__BROKER__PORT:-1883}:1883/tcp"
     networks:
       - iot-net
 

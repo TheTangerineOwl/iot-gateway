@@ -20,6 +20,7 @@ from protocols.adapters.base import ProtocolAdapter
 from protocols.adapters.coap_adapter import CoAPAdapter
 from protocols.adapters.http_adapter import HTTPAdapter
 from protocols.adapters.websocket_adapter import WebSocketAdapter
+from protocols.adapters.mqtt_adapter import MQTTAdapter
 
 # env = Env(upper=True)
 logger = logging.getLogger(__name__)
