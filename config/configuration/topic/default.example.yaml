@@ -1,0 +1,26 @@
+base:
+  devices: 'devices'
+  gateway: 'gateway'
+  system: 'system'
+gateway:
+  pipeline:
+    processed:
+      base: 'gateway/processed'
+      telemetry: 'gateway/processed/telemetry/{device_id}'
+    rejected:
+      base: 'gateway/rejected'
+      telemetry: 'gateway/rejected/telemetry/{device_id}'
+system:
+  health: 'system/health'
+  metrics: 'system/metrics'
+  alerts: 'system/alerts'
+devices:
+  telemetry: 'devices/{device_id}/telemetry'
+  register: 'devices/{device_id}/register'
+  heartbeat: 'devices/{device_id}/heartbeat'
+  status:
+    base: 'devices/{device_id}/status'
+    online: 'devices/{device_id}/status/online'
+    offline: 'devices/{device_id}/status/offline'
+  command: 'devices/{device_id}/command'
+  command_response: 'devices/{device_id}/command/response'

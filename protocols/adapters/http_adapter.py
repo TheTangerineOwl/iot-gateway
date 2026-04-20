@@ -12,16 +12,15 @@ from aiohttp import web
 from http import HTTPStatus
 import json
 import logging
-from typenv import Env
 from typing import Any
 from config.config import YAMLConfigLoader
+from config.topics import TopicKey
 from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
 from protocols.message_builder import MessageBuilder
 
 
-env = Env(upper=True)
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +33,6 @@ class HTTPAdapter(ProtocolAdapter):
         self._adapter_config = self._config.get_adapter_config(
             self.protocol_name.lower()
         )
-        # self._config: dict[str, Any] = get_conf('adapters.http', {})
         self._host: str = self._adapter_config.get('host', '0.0.0.0')
         self._port: int = self._adapter_config.get('post', 8081)
 
@@ -126,7 +124,7 @@ class HTTPAdapter(ProtocolAdapter):
     async def _handle_ingest(self, request) -> Any:
         """Приём телеметрии."""
         try:
-            body = await request.json()
+            body: dict[str, Any] = await request.json()
         except json.JSONDecodeError:
             return web.json_response(
                 MessageBuilder.err_inval_json(),
@@ -135,28 +133,39 @@ class HTTPAdapter(ProtocolAdapter):
 
         proto_meta = self._build_meta(request)
 
-        message = MessageBuilder.normalize(
-            body,
-            protocol=self.protocol_type,
-            topic=self._wh_telemetry,
-            proto_meta=proto_meta
-        )
+        device_id = body.get('device_id', None)
 
-        if not message.device_id:
+        if not device_id:
             return web.json_response(
                 MessageBuilder.err_miss_dev_id(),
                 status=HTTPStatus.BAD_REQUEST
             )
 
+        message = MessageBuilder.normalize(
+            body,
+            protocol=self.protocol_type,
+            topic=self.get_topic(
+                TopicKey.DEVICES_TELEMETRY,
+                device_id=device_id
+            ),
+            proto_meta=proto_meta
+        )
+
         fut = self._register_pending(message)
 
         assert self._bus is not None
         sub = self._bus.subscribe(
-            f'rejected.telemetry.{message.device_id}',
+            self.get_topic(
+                TopicKey.REJECTED_TELEMETRY,
+                device_id=device_id
+            ),
             self._handle_rejected_base
         )
 
-        await self._publish_message(f"telemetry.{message.device_id}", message)
+        await self._publish_message(
+            message.message_topic,
+            message
+        )
 
         logger.log(5, 'HTTP adapter got telemetry: %s', message.to_dict())
 
@@ -191,7 +200,7 @@ class HTTPAdapter(ProtocolAdapter):
     async def _handle_register(self, request) -> Any:
         """Прием сообщения о регистрации."""
         try:
-            body = await request.json()
+            body: dict[str, Any] = await request.json()
         except json.JSONDecodeError:
             return web.json_response(
                 MessageBuilder.err_inval_json(),
@@ -200,23 +209,27 @@ class HTTPAdapter(ProtocolAdapter):
 
         proto_meta = self._build_meta(request)
 
-        message = MessageBuilder.normalize(
-            body,
-            protocol=self.protocol_type,
-            topic=self._url_register,
-            proto_meta=proto_meta,
-            message_type=MessageType.REGISTRATION
-        )
+        device_id = body.get('device_id', None)
 
-        if not message.device_id:
+        if not device_id:
             return web.json_response(
                 MessageBuilder.err_miss_dev_id(),
                 status=HTTPStatus.BAD_REQUEST
             )
 
-        message.message_topic = f"device.register.{message.device_id}"
+        message = MessageBuilder.normalize(
+            body,
+            protocol=self.protocol_type,
+            topic=self.get_topic(
+                TopicKey.DEVICES_REGISTER,
+                device_id=device_id
+            ),
+            proto_meta=proto_meta,
+            message_type=MessageType.REGISTRATION
+        )
+
         await self._publish_message(
-            f"device.register.{message.device_id}",
+            message.message_topic,
             message
         )
 

@@ -16,6 +16,7 @@ from contextlib import AsyncExitStack
 from aiomqtt import Client, MqttError, TLSParameters, ProtocolVersion
 import ssl
 from config.config import YAMLConfigLoader
+from config.topics import TopicKey
 from protocols.adapters.base import ProtocolAdapter
 from models.message import Message, MessageType
 from models.device import ProtocolType
@@ -290,30 +291,24 @@ class MQTTAdapter(ProtocolAdapter):
             return False
 
     async def _subscribe_topics(self) -> None:
-        """
-        Подписаться на топики и запустить получатель сообщений.
-
-        Топики:
-        - devices/+/telemetry (одноуровневый wildcard)
-        - devices/+/register
-        - devices/+/status
-        - devices/+/command/response
-        """
-        if not self.client:
+        """Подписаться на топики и запустить получатель сообщений."""
+        if not self.client or not self.is_connected:
             logger.warning("Cannot subscribe: client not initialized")
             return
 
         try:
-            topics = [
-                "devices/+/telemetry",
-                "devices/+/register",
-                "devices/+/status",
-                "devices/+/command/response",
-            ]
 
-            for topic in topics:
-                await self.client.subscribe(topic, qos=self.qos)
-                logger.debug(f"Subscribed to: {topic}")
+            subscriptions = self._adapter_config.get(
+                'topics', {}
+            ).get('subscriptions', {})
+
+            for k, v in subscriptions.items():
+                topic = v.get('topic')
+                qos = int(v.get('qos', 1))
+                await self.client.subscribe(topic, qos=qos)
+                logger.info(
+                    f'Subscribed to MQTT topic for {k}: {topic} (QoS={qos})'
+                )
 
             self._message_task = asyncio.create_task(self._receive_messages())
 
@@ -370,7 +365,8 @@ class MQTTAdapter(ProtocolAdapter):
                 payload = {"raw": payload_str}
 
             message_type, message_topic = self._parse_message_type(
-                message_category
+                message_category,
+                device_id=device_id
             )
 
             message = Message(
@@ -378,7 +374,7 @@ class MQTTAdapter(ProtocolAdapter):
                 message_type=message_type,
                 payload=payload,
                 protocol=ProtocolType.MQTT,
-                message_topic=message_topic + device_id
+                message_topic=message_topic
             )
 
             logger.debug(
@@ -393,16 +389,28 @@ class MQTTAdapter(ProtocolAdapter):
         except Exception as e:
             logger.exception(f"Error processing MQTT message: {e}")
 
-    @staticmethod
-    def _parse_message_type(message_category: str) -> tuple[MessageType, str]:
+    def _parse_message_type(
+        self,
+        message_category: str,
+        **kwargs: str
+    ) -> tuple[MessageType, str]:
         """Преобразовать топик MQTT в топик MessageBus."""
         mapping = {
-            "telemetry": (MessageType.TELEMETRY, 'telemetry.'),
-            "register": (MessageType.REGISTRATION, 'device.register.'),
-            "status": (MessageType.STATUS, 'device.status.'),
+            "telemetry": (
+                MessageType.TELEMETRY,
+                self.get_topic(TopicKey.DEVICES_TELEMETRY, **kwargs)
+            ),
+            "register": (
+                MessageType.REGISTRATION,
+                self.get_topic(TopicKey.DEVICES_REGISTER, **kwargs)
+            ),
+            "status": (
+                MessageType.STATUS,
+                self.get_topic(TopicKey.DEVICES_STATUS, **kwargs)
+            ),
             "command/response": (
                 MessageType.COMMAND_RESPONSE,
-                'device.command.'
+                self.get_topic(TopicKey.DEVICES_COMMAND_RESPONSE, **kwargs)
             ),
         }
         return mapping.get(

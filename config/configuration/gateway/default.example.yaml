@@ -11,5 +11,6 @@ message_bus:
   max_queue: 1000
   timeout: 1.0
 logger:
+  dir: logs/
   debug: true
-  level: INFO
+  level: DEBUG
