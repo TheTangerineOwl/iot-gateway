@@ -4,6 +4,7 @@ import logging
 import signal
 from typing import Any
 from config.config import get_conf, YAMLConfigLoader
+from config.topics import TopicKey
 from core.registry import DeviceRegistry
 from core.message_bus import MessageBus
 from core.pipeline.pipeline import Pipeline
@@ -36,6 +37,7 @@ class Gateway:
         self._running = False
 
         self._bus = MessageBus(self._config)
+        self._topics = self._bus.topics
 
         self._registry = DeviceRegistry(
             max_devices=int(get_conf(
@@ -156,30 +158,55 @@ class Gateway:
             await self._registry.heartbeat(result.device_id)
             result.processed = True
             await self._bus.publish(
-                f'processed.telemetry.{result.device_id}',
+                self._topics.get(
+                    TopicKey.PROCESSED_TELEMETRY,
+                    device_id=result.device_id
+                ),
                 result
             )
         else:
             await self._bus.publish(
-                f'rejected.telemetry.{message.device_id}',
+                self._topics.get(
+                    TopicKey.REJECTED_TELEMETRY,
+                    device_id=message.device_id
+                ),
                 message
             )
 
-    async def _handle_device_message(self, message: Message) -> None:
+    async def _handle_device_status(self, message: Message) -> None:
         """Обработать технические сообщения."""
-        if message.message_type == MessageType.REGISTRATION:
-            device = Device.from_dict(message.payload)
-            device.device_status = DeviceStatus.ONLINE
-            await self._registry.register(device)
-
-        elif message.message_type == MessageType.HEARTBEAT:
-            await self._registry.heartbeat(message.device_id)
-
-        elif message.message_type == MessageType.STATUS:
+        if message.message_type == MessageType.STATUS:
             status = DeviceStatus(
                 message.payload.get("device_status", "online")
             )
             await self._registry.update_status(message.device_id, status)
+        else:
+            raise ValueError(
+                f'Incorrect message type {message.message_type}'
+                f' for status topic {message.message_topic}'
+            )
+
+    async def _handle_device_register(self, message: Message) -> None:
+        """Обработать сообщение регистрации."""
+        if message.message_type == MessageType.REGISTRATION:
+            device = Device.from_dict(message.payload)
+            device.device_status = DeviceStatus.ONLINE
+            await self._registry.register(device)
+        else:
+            raise ValueError(
+                f'Incorrect message type {message.message_type}'
+                f' for register topic {message.message_topic}'
+            )
+
+    async def _handle_device_heartbeat(self, message: Message) -> None:
+        """Обработать сообщение регистрации."""
+        if message.message_type == MessageType.HEARTBEAT:
+            await self._registry.heartbeat(message.device_id)
+        else:
+            raise ValueError(
+                f'Incorrect message type {message.message_type}'
+                f' for heartbeat topic {message.message_topic}'
+            )
 
     def register_adapter(self, adapter: ProtocolAdapter) -> None:
         """Зарегистрировать адаптер протокола."""
@@ -206,10 +233,34 @@ class Gateway:
             )
         await self._bus.start()
 
-        self._bus.subscribe("device.*", self._handle_device_message)
-        self._bus.subscribe("telemetry.*", self._handle_telemetry)
         self._bus.subscribe(
-            "processed.telemetry.*",
+            self._topics.get_subscription_pattern(
+                TopicKey.DEVICES_HEARTBEAT
+            ),
+            self._handle_device_heartbeat
+        )
+        self._bus.subscribe(
+            self._topics.get_subscription_pattern(
+                TopicKey.DEVICES_REGISTER
+            ),
+            self._handle_device_register
+        )
+        self._bus.subscribe(
+            self._topics.get_subscription_pattern(
+                TopicKey.DEVICES_STATUS
+            ),
+            self._handle_device_status
+        )
+        self._bus.subscribe(
+            self._topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ),
+            self._handle_telemetry
+        )
+        self._bus.subscribe(
+            self._topics.get_subscription_pattern(
+                TopicKey.PROCESSED_TELEMETRY
+            ),
             self._storage_subscriber.handle
         )
 

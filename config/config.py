@@ -2,6 +2,7 @@
 from datetime import datetime
 import logging
 from pathlib import Path
+from shutil import copyfile, SameFileError
 from typenv import Env
 from typing import Any, Dict, Optional
 import yaml
@@ -46,7 +47,7 @@ def _supress_loggers(level: int | str):
 
 def setup_logging(config: Dict[str, Any]) -> None:
     """Настроить логирование на основе конфигурации."""
-    logging_config = config.get('logging', {})
+    logging_config = config.get('gateway', {}).get('logger', {})
 
     level = str(logging_config.get('level', 'INFO')).upper()
     debug = logging_config.get('debug', False)
@@ -73,12 +74,13 @@ def setup_logging(config: Dict[str, Any]) -> None:
 class YAMLConfigLoader:
     """Загрузчик YAML конфигурации."""
 
-    def __init__(self, folder: str = 'configuration'):
+    def __init__(self, folder: str = 'configuration', testing: bool = False):
         """Инициализировать конфигуратор."""
         self.config_folder = Path(folder)
         self.config: Dict[str, Any] = {}
         self._adapter_configs: Dict[str, Dict[str, Any]] = {}
         self._storage_configs: Dict[str, Dict[str, Any]] = {}
+        self._testing = testing
 
     def _set_nested_dict(
         self,
@@ -182,6 +184,104 @@ class YAMLConfigLoader:
             logger.exception('Permission error: ', exc)
             raise
 
+    def _copy_config_file(
+        self,
+        base_file: Path,
+        stem: str,
+        directory: Path
+    ) -> Path | None:
+        """Создает копию файла конфигурации."""
+        try:
+            sfx = base_file.suffixes.copy()
+            if '.example' in sfx:
+                sfx.remove('.example')
+            name = stem + ''.join(sfx)
+            new_path = Path(directory) / name
+            if new_path == base_file:
+                raise SameFileError('file already exists')
+            file = copyfile(base_file, new_path)
+            return file
+        except Exception as exc:
+            logger.exception(
+                f'Could not create {name}: ',
+                exc
+            )
+            return None
+
+    _FILENAMES_RUNNING = {'running.yaml', 'running.yml'}
+    _FILENAMES_DEFAULT = {'default.yaml', 'default.yml'}
+    _FILENAMES_TESTING = {'testing.yaml', 'testing.yml'}
+    _FILENAMES_DEFAULT_BASE = {'default.example.yaml', 'default.example.yml'}
+    _FILENAMES_TESTING_BASE = {'testing.example.yaml', 'testing.example.yml'}
+
+    def _config_default(
+        self,
+        files: list[Path],
+        directory: Path,
+        parent_key: Optional[str] = None
+    ):
+        """Находит файлы конфигурации и загружает их."""
+        running: Optional[Path] = None
+        default: Optional[Path] = None
+        default_base: Optional[Path] = None
+        mode: str = 'testing' if self._testing else 'running'
+
+        for file_path in files:
+            name = file_path.name.lower()
+            if not self._testing:
+                if name in self._FILENAMES_RUNNING:
+                    running = file_path
+                elif name in self._FILENAMES_DEFAULT:
+                    default = file_path
+                elif name in self._FILENAMES_DEFAULT_BASE:
+                    default_base = file_path
+            else:
+                if name in self._FILENAMES_TESTING:
+                    running = file_path
+                elif name in self._FILENAMES_TESTING_BASE:
+                    default = file_path
+
+        if running:
+            try:
+                if default:
+                    self._load_yaml_file(default, parent_key)
+                self._load_yaml_file(running, parent_key)
+            except Exception as exc:
+                logger.exception(exc)
+            finally:
+                return
+        if default:
+            logger.debug(
+                f'Could not find {mode} config in {directory}, '
+                f'creating from default: {default}.'
+            )
+            created = self._copy_config_file(default, mode, directory)
+            if created:
+                try:
+                    self._load_yaml_file(created, parent_key)
+                except Exception as exc:
+                    logger.exception(exc)
+            return
+        if default_base:
+            f'Could not find {mode} or default config in {directory},'
+            f' creating from base: {default_base}.'
+            created_def = self._copy_config_file(
+                default_base,
+                'default',
+                directory
+            )
+            if created_def:
+                created_run = self._copy_config_file(
+                    created_def,
+                    mode,
+                    directory
+                )
+                if created_run:
+                    try:
+                        self._load_yaml_file(created_run, parent_key)
+                    except Exception as exc:
+                        logger.exception(exc)
+
     def _scan_directory(
         self,
         directory: Path,
@@ -197,28 +297,7 @@ class YAMLConfigLoader:
         files = [f for f in entries if f.is_file()]
         dirs = [d for d in entries if d.is_dir()]
 
-        running = None
-        default = None
-        for file_path in files:
-            name = file_path.stem.lower()
-            if name == 'running':
-                running = file_path
-            elif name in 'default':
-                default = file_path
-        if default is not None:
-            self._load_yaml_file(default, parent_key)
-        if running is None:
-            if default is not None:
-                logger.debug(
-                    f'Could not find running config in {directory}, '
-                    f'using default: {default}.'
-                )
-            else:
-                logger.debug(
-                    f'Could not find any valid config in {directory}'
-                )
-        else:
-            self._load_yaml_file(running, parent_key)
+        self._config_default(files, directory, parent_key)
 
         for dir_path in dirs:
             dir_name = dir_path.name
@@ -386,9 +465,9 @@ def load_configuration(
     2. Переопределяет значения переменными окружения (если env задан)
     3. Настраивает логирование
     """
-    loader = YAMLConfigLoader(config_folder)
+    logger.setLevel(logging.DEBUG)
 
-    loader.config_folder = Path(config_folder)
+    loader = YAMLConfigLoader(config_folder)
 
     config = loader.load()
 

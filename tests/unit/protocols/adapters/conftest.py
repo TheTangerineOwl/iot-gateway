@@ -7,6 +7,7 @@ from aiocoap import Message as CoAPMessage, POST as COAP_POST
 from unittest.mock import AsyncMock, MagicMock
 from typenv import Env
 from config.config import load_env, YAMLConfigLoader
+from config.topics import TopicManager
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from protocols.adapters.http_adapter import HTTPAdapter
@@ -177,6 +178,7 @@ async def coap_adapter(
 
 def _make_adapter(
     config: YAMLConfigLoader,
+    topics: TopicManager,
     bus: MagicMock | None = None,
     registry: MagicMock | None = None,
 ) -> CoAPAdapter:
@@ -184,6 +186,7 @@ def _make_adapter(
     adapter = CoAPAdapter(config)
     if bus is None:
         mock_bus = MagicMock()
+        mock_bus.topics = topics
         mock_bus._config = config
         mock_bus.publish = AsyncMock()
         mock_bus.subscribe = MagicMock(return_value=MagicMock())
@@ -199,9 +202,12 @@ def coap_request(payload: bytes = b"") -> CoAPMessage:
 
 
 @pytest.fixture
-def mock_adapter(config: YAMLConfigLoader) -> CoAPAdapter:
+def mock_adapter(
+    config: YAMLConfigLoader,
+    topics: TopicManager
+) -> CoAPAdapter:
     """CoAP-адаптер с mock-шиной (для тестов без реальной шины)."""
-    return _make_adapter(config)
+    return _make_adapter(config, topics)
 
 
 @pytest.fixture

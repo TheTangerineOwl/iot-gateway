@@ -1,0 +1,38 @@
+enabled: true
+client_id: iot-gateway
+broker:
+  host: 127.0.0.1
+  port: 1883
+bind:
+  address: 0.0.0.0
+  port: 0
+auth:
+  username:
+  password:
+tls:
+  use: false
+  insecure: false
+  ca_certs:
+  certfile:
+  keyfile:
+  keyfile_password:
+version: 4
+keepalive: 60
+qos: 1
+clean_session: true
+reconnect_delay: 15
+max_reconnect_delay: 600
+timeout_reject: 1.0
+subscriptions:
+  telemetry:
+    topic: 'devices/+/telemetry'
+    qos: 1
+  register:
+    topic: 'devices/+/register'
+    qos: 1
+  status:
+    topic: 'devices/+/status'
+    qos: 1
+  response:
+    topic: 'devices/+/command/response'
+    qos: 1

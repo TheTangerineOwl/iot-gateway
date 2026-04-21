@@ -2,6 +2,7 @@
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
+from config.topics import TopicKey, TopicManager
 from models.device import ProtocolType
 from protocols.adapters.mqtt_adapter import MQTTAdapter
 from tests.conftest import DEVICE_DEF_ID
@@ -338,6 +339,7 @@ class TestMQTTAdapterSendCommand:
     @pytest.mark.asyncio
     async def test_send_command_publishes_to_correct_topic(
         self,
+        topics: TopicManager,
         mqtt_adapter: MQTTAdapter
     ):
         """send_command() публикует на тему 'devices/{device_id}/command'."""
@@ -351,7 +353,9 @@ class TestMQTTAdapterSendCommand:
         # Проверяем, что publish был вызван с правильной темой
         call_args = mock_client.publish.call_args
         assert call_args is not None
-        assert call_args[1]['topic'] == f"devices/{DEVICE_DEF_ID}/command"
+        assert call_args[1]['topic'] == topics.get(
+            TopicKey.DEVICES_COMMAND, device_id=DEVICE_DEF_ID
+        )
 
     @pytest.mark.asyncio
     async def test_send_command_publishes_json_payload(
@@ -433,12 +437,19 @@ class TestMQTTAdapterSendMessage:
     """Отправка сообщений через MQTT."""
 
     @pytest.mark.asyncio
-    async def test_send_message_returns_bool(self, mqtt_adapter: MQTTAdapter):
+    async def test_send_message_returns_bool(
+        self,
+        topics: TopicManager,
+        mqtt_adapter: MQTTAdapter
+    ):
         """send_message() возвращает boolean."""
         mqtt_adapter.is_connected = False
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.message",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             {"error": "test"}
         )
         assert isinstance(result, bool)
@@ -446,6 +457,7 @@ class TestMQTTAdapterSendMessage:
     @pytest.mark.asyncio
     async def test_send_message_fails_when_not_connected(
         self,
+        topics: TopicManager,
         mqtt_adapter: MQTTAdapter
     ):
         """send_message() возвращает False, если не подключен."""
@@ -453,7 +465,10 @@ class TestMQTTAdapterSendMessage:
         mqtt_adapter.client = None
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.message",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             {"error": "test"}
         )
         assert result is False
@@ -461,6 +476,7 @@ class TestMQTTAdapterSendMessage:
     @pytest.mark.asyncio
     async def test_send_message_succeeds_when_connected(
         self,
+        topics: TopicManager,
         mqtt_adapter: MQTTAdapter
     ):
         """send_message() возвращает True при успешной отправке."""
@@ -471,38 +487,18 @@ class TestMQTTAdapterSendMessage:
 
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.message",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             {"error": "test"}
         )
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_send_message_converts_dots_to_slashes(
-        self,
-        mqtt_adapter: MQTTAdapter
-    ):
-        """send_message() преобразует точки в слэши в топике."""
-        mock_client = AsyncMock()
-        mock_client.publish = AsyncMock()
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = mock_client
-
-        await mqtt_adapter.send_message(
-            DEVICE_DEF_ID,
-            "error.message.detail",
-            {"error": "test"}
-        )
-
-        call_args = mock_client.publish.call_args
-        assert call_args is not None
-        # Тема должна быть: devices/error/message/detail
-        topic = call_args[1]['topic']
-        assert '/' in topic
-        assert topic.startswith('devices')
-
-    @pytest.mark.asyncio
     async def test_send_message_publishes_json_payload(
         self,
+        topics: TopicManager,
         mqtt_adapter: MQTTAdapter
     ):
         """send_message() публикует payload в формате JSON."""
@@ -513,7 +509,12 @@ class TestMQTTAdapterSendMessage:
 
         message = {"error": "invalid_data", "details": "missing_field"}
         await mqtt_adapter.send_message(
-            DEVICE_DEF_ID, "error.message", message
+            DEVICE_DEF_ID,
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
+            message
         )
 
         call_args = mock_client.publish.call_args
@@ -526,6 +527,7 @@ class TestMQTTAdapterSendMessage:
     @pytest.mark.asyncio
     async def test_send_message_uses_configured_qos(
         self,
+        topics: TopicManager,
         mqtt_adapter: MQTTAdapter
     ):
         """send_message() использует настроенный QoS."""
@@ -535,7 +537,14 @@ class TestMQTTAdapterSendMessage:
         mqtt_adapter.client = mock_client
         mqtt_adapter.qos = 1
 
-        await mqtt_adapter.send_message(DEVICE_DEF_ID, "error.message", {})
+        await mqtt_adapter.send_message(
+            DEVICE_DEF_ID,
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
+            {}
+        )
 
         call_args = mock_client.publish.call_args
         assert call_args is not None
@@ -544,6 +553,7 @@ class TestMQTTAdapterSendMessage:
     @pytest.mark.asyncio
     async def test_send_message_handles_mqtt_error(
         self,
+        topics: TopicManager,
         mqtt_adapter: MQTTAdapter
     ):
         """send_message() обрабатывает MqttError корректно."""
@@ -556,7 +566,10 @@ class TestMQTTAdapterSendMessage:
 
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.message",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             {"error": "test"}
         )
         assert result is False
@@ -564,6 +577,7 @@ class TestMQTTAdapterSendMessage:
     @pytest.mark.asyncio
     async def test_send_message_handles_generic_exception(
         self,
+        topics: TopicManager,
         mqtt_adapter: MQTTAdapter
     ):
         """send_message() обрабатывает генерические исключения."""
@@ -574,7 +588,10 @@ class TestMQTTAdapterSendMessage:
 
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.message",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             {"error": "test"}
         )
         assert result is False

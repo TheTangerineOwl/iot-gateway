@@ -1,0 +1,9 @@
+enabled: true
+host: 127.0.0.1
+port: 5683
+url_root: /api/v1/coap
+endpoints:
+  telemetry: /ingest
+  register: /devices/register
+  health: /health
+timeout_reject: 0.2

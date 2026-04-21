@@ -1,6 +1,7 @@
 """Общие фикстуры для тестов протоколов."""
 import pytest
 import json
+from config.topics import TopicKey, TopicManager
 from models.message import Message, MessageType
 from tests.conftest import (
     DEVICE_DEF_ID,
@@ -58,13 +59,16 @@ def message() -> Message:
 
 
 @pytest.fixture
-def registration_message() -> Message:
+def registration_message(topics: TopicManager) -> Message:
     """Тестовое сообщение регистрации."""
     return Message(
         message_id=MSG_DEF_ID,
         device_id=DEVICE_DEF_ID,
         message_type=MessageType.REGISTRATION,
-        message_topic=f'device.register.{DEVICE_DEF_ID}',
+        message_topic=topics.get(
+            TopicKey.DEVICES_REGISTER,
+            device_id=DEVICE_DEF_ID
+        ),
         payload={'name': 'Sensor A'},
         protocol=MSG_DEF_PROTOCOL,
         schema_version=MSG_DEF_SCHEMA,
