@@ -5,6 +5,7 @@ from aiohttp.test_utils import TestClient
 from http import HTTPStatus
 from typing import Any
 from protocols.adapters.http_adapter import HTTPAdapter
+from config.topics import TopicKey, TopicManager
 from core.message_bus import MessageBus
 from models.message import Message, MessageType
 from models.device import ProtocolType
@@ -194,6 +195,7 @@ class TestHTTPAdapter:
         @pytest.mark.unit
         async def test_message_published_to_bus(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_telemetry: str,
@@ -205,7 +207,9 @@ class TestHTTPAdapter:
             async def _handler(msg: Message) -> None:
                 received.append(msg)
 
-            running_bus.subscribe(f'telemetry.{DEVICE_DEF_ID}', _handler)
+            running_bus.subscribe(topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ), _handler)
 
             await http_client.post(
                 http_url_telemetry,
@@ -218,6 +222,7 @@ class TestHTTPAdapter:
         @pytest.mark.unit
         async def test_published_message_has_correct_device_id(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_telemetry: str,
@@ -229,7 +234,9 @@ class TestHTTPAdapter:
             async def _handler(msg: Message) -> None:
                 received.append(msg)
 
-            running_bus.subscribe(f'telemetry.{DEVICE_DEF_ID}', _handler)
+            running_bus.subscribe(topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ), _handler)
 
             await http_client.post(
                 http_url_telemetry,
@@ -242,6 +249,7 @@ class TestHTTPAdapter:
         @pytest.mark.unit
         async def test_published_message_type_is_telemetry(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_telemetry: str,
@@ -253,7 +261,9 @@ class TestHTTPAdapter:
             async def _handler(msg: Message) -> None:
                 received.append(msg)
 
-            running_bus.subscribe(f'telemetry.{DEVICE_DEF_ID}', _handler)
+            running_bus.subscribe(topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ), _handler)
 
             await http_client.post(
                 http_url_telemetry,
@@ -266,6 +276,7 @@ class TestHTTPAdapter:
         @pytest.mark.unit
         async def test_published_message_topic_matches_url(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_telemetry: str,
@@ -277,7 +288,10 @@ class TestHTTPAdapter:
             async def _handler(m: Message) -> None:
                 received.append(m)
 
-            running_bus.subscribe(f'telemetry.{DEVICE_DEF_ID}', _handler)
+            sub_topic = topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            )
+            running_bus.subscribe(sub_topic, _handler)
 
             await http_client.post(
                 http_url_telemetry,
@@ -285,11 +299,16 @@ class TestHTTPAdapter:
             )
             await drain(running_bus)
 
-            assert received[0].message_topic == http_url_telemetry
+            topic = topics.get(
+                TopicKey.DEVICES_TELEMETRY,
+                device_id=DEVICE_DEF_ID
+            )
+            assert received[0].message_topic == topic
 
         @pytest.mark.unit
         async def test_published_message_payload_matches(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_telemetry: str,
@@ -302,7 +321,9 @@ class TestHTTPAdapter:
             async def _handler(m: Message) -> None:
                 received.append(m)
 
-            running_bus.subscribe(f'telemetry.{device_id}', _handler)
+            running_bus.subscribe(topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ), _handler)
 
             await http_client.post(
                 http_url_telemetry,
@@ -315,6 +336,7 @@ class TestHTTPAdapter:
         @pytest.mark.unit
         async def test_rejected_message_returns_422(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_telemetry: str,
@@ -332,10 +354,15 @@ class TestHTTPAdapter:
                     },
                 )
                 await running_bus.publish(
-                    f'rejected.telemetry.{device_id}', rejected
+                    topics.get(
+                        TopicKey.REJECTED_TELEMETRY,
+                        device_id=device_id
+                    ), rejected
                 )
 
-            running_bus.subscribe(f'telemetry.{device_id}', _reject_handler)
+            running_bus.subscribe(topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ), _reject_handler)
 
             resp = await http_client.post(
                 http_url_telemetry,
@@ -346,6 +373,7 @@ class TestHTTPAdapter:
         @pytest.mark.unit
         async def test_rejected_message_body_status(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_telemetry: str,
@@ -363,10 +391,15 @@ class TestHTTPAdapter:
                     },
                 )
                 await running_bus.publish(
-                    f'rejected.telemetry.{device_id}', rejected
+                    topics.get(
+                        TopicKey.REJECTED_TELEMETRY,
+                        device_id=device_id
+                    ), rejected
                 )
 
-            running_bus.subscribe(f'telemetry.{device_id}', _reject_handler)
+            running_bus.subscribe(topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ), _reject_handler)
 
             resp = await http_client.post(
                 http_url_telemetry,
@@ -464,6 +497,7 @@ class TestHTTPAdapter:
         @pytest.mark.unit
         async def test_register_published_to_bus(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_register: str,
@@ -475,7 +509,9 @@ class TestHTTPAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                f'device.register.{DEVICE_DEF_ID}', _handler
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_REGISTER
+                ), _handler
             )
 
             await http_client.post(
@@ -489,6 +525,7 @@ class TestHTTPAdapter:
         @pytest.mark.unit
         async def test_register_message_type_is_registration(
             self,
+            topics: TopicManager,
             http_client: TestClient,
             running_bus: MessageBus,
             http_url_register: str,
@@ -500,7 +537,9 @@ class TestHTTPAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                f'device.register.{DEVICE_DEF_ID}', _handler
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_REGISTER
+                ), _handler
             )
 
             await http_client.post(

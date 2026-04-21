@@ -49,6 +49,12 @@ class _IngestResource(resource.Resource):
             )
         sub = None
         try:
+            message: Message | None = None
+            if not self._adapter._bus:
+                raise RuntimeError(
+                    f'Adapter {self._adapter.protocol_name} not '
+                    'connected to message bus.'
+                )
 
             message = MessageBuilder.normalize(
                 body,
@@ -60,11 +66,6 @@ class _IngestResource(resource.Resource):
                 message_type=MessageType.TELEMETRY
             )
 
-            if not self._adapter._bus:
-                raise RuntimeError(
-                    f'Adapter {self._adapter.protocol_name} not '
-                    'connected to message bus.'
-                )
             sub = self._adapter._bus.subscribe(
                 self._adapter.get_topic(
                     TopicKey.REJECTED_TELEMETRY,
@@ -78,7 +79,8 @@ class _IngestResource(resource.Resource):
                 message.message_topic, message
             )
         except RuntimeError as exc:
-            self._adapter._pending.pop(message.message_id, None)
+            if message:
+                self._adapter._pending.pop(message.message_id, None)
             logger.error('CoAP ingest: publish error — %s', exc)
             if sub and self._adapter._bus:
                 self._adapter._bus.unsubscribe(sub)

@@ -231,9 +231,6 @@ class MQTTAdapter(ProtocolAdapter):
             return False
 
         try:
-            # topic = f"mqtt/errors/{device_id}"
-            topic = 'devices' + topic
-            topic = topic.replace('.', '/')
             payload = json.dumps(message)
 
             await self.client.publish(
@@ -268,7 +265,12 @@ class MQTTAdapter(ProtocolAdapter):
             return False
 
         try:
-            topic = f"devices/{device_id}/command"
+            if self._topics is None:
+                raise RuntimeError('Topic manager is not set')
+            topic = self._topics.get(
+                TopicKey.DEVICES_COMMAND,
+                device_id=device_id
+            )
             payload = json.dumps(command)
 
             await self.client.publish(

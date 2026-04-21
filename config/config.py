@@ -74,12 +74,13 @@ def setup_logging(config: Dict[str, Any]) -> None:
 class YAMLConfigLoader:
     """Загрузчик YAML конфигурации."""
 
-    def __init__(self, folder: str = 'configuration'):
+    def __init__(self, folder: str = 'configuration', testing: bool = False):
         """Инициализировать конфигуратор."""
         self.config_folder = Path(folder)
         self.config: Dict[str, Any] = {}
         self._adapter_configs: Dict[str, Dict[str, Any]] = {}
         self._storage_configs: Dict[str, Dict[str, Any]] = {}
+        self._testing = testing
 
     def _set_nested_dict(
         self,
@@ -207,6 +208,12 @@ class YAMLConfigLoader:
             )
             return None
 
+    _FILENAMES_RUNNING = {'running.yaml', 'running.yml'}
+    _FILENAMES_DEFAULT = {'default.yaml', 'default.yml'}
+    _FILENAMES_TESTING = {'testing.yaml', 'testing.yml'}
+    _FILENAMES_DEFAULT_BASE = {'default.example.yaml', 'default.example.yml'}
+    _FILENAMES_TESTING_BASE = {'testing.example.yaml', 'testing.example.yml'}
+
     def _config_default(
         self,
         files: list[Path],
@@ -217,18 +224,27 @@ class YAMLConfigLoader:
         running: Optional[Path] = None
         default: Optional[Path] = None
         default_base: Optional[Path] = None
+        mode: str = 'testing' if self._testing else 'running'
 
         for file_path in files:
             name = file_path.name.lower()
-            if name in ['running.yaml', 'running.yml']:
-                running = file_path
-            elif name in ['default.yaml', 'default.yml']:
-                default = file_path
-            elif name in ['default.example.yaml', 'default.example.yml']:
-                default_base = file_path
+            if not self._testing:
+                if name in self._FILENAMES_RUNNING:
+                    running = file_path
+                elif name in self._FILENAMES_DEFAULT:
+                    default = file_path
+                elif name in self._FILENAMES_DEFAULT_BASE:
+                    default_base = file_path
+            else:
+                if name in self._FILENAMES_TESTING:
+                    running = file_path
+                elif name in self._FILENAMES_TESTING_BASE:
+                    default = file_path
 
         if running:
             try:
+                if default:
+                    self._load_yaml_file(default, parent_key)
                 self._load_yaml_file(running, parent_key)
             except Exception as exc:
                 logger.exception(exc)
@@ -236,10 +252,10 @@ class YAMLConfigLoader:
                 return
         if default:
             logger.debug(
-                f'Could not find running config in {directory}, '
+                f'Could not find {mode} config in {directory}, '
                 f'creating from default: {default}.'
             )
-            created = self._copy_config_file(default, 'running', directory)
+            created = self._copy_config_file(default, mode, directory)
             if created:
                 try:
                     self._load_yaml_file(created, parent_key)
@@ -247,7 +263,7 @@ class YAMLConfigLoader:
                     logger.exception(exc)
             return
         if default_base:
-            f'Could not find running or default config in {directory},'
+            f'Could not find {mode} or default config in {directory},'
             f' creating from base: {default_base}.'
             created_def = self._copy_config_file(
                 default_base,
@@ -257,7 +273,7 @@ class YAMLConfigLoader:
             if created_def:
                 created_run = self._copy_config_file(
                     created_def,
-                    'running',
+                    mode,
                     directory
                 )
                 if created_run:
@@ -452,8 +468,6 @@ def load_configuration(
     logger.setLevel(logging.DEBUG)
 
     loader = YAMLConfigLoader(config_folder)
-
-    loader.config_folder = Path(config_folder)
 
     config = loader.load()
 

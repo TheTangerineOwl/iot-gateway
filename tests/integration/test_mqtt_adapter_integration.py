@@ -2,8 +2,7 @@
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
-from typenv import Env
-from config.config import load_env
+from config.topics import TopicKey, TopicManager
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from models.message import Message, MessageType
@@ -11,10 +10,6 @@ from protocols.adapters.mqtt_adapter import MQTTAdapter
 from tests.conftest import (
     DEVICE_DEF_ID
 )
-
-
-load_env('env.example')
-env = Env(upper=True)
 
 
 @pytest.fixture
@@ -55,7 +50,11 @@ class TestMQTTAdapterMessageBusIntegration:
         mock_client.publish.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_send_message_with_real_bus(self, mqtt_adapter: MQTTAdapter):
+    async def test_send_message_with_real_bus(
+        self,
+        topics: TopicManager,
+        mqtt_adapter: MQTTAdapter
+    ):
         """send_message работает с реальной bus."""
         mock_client = AsyncMock()
         mock_client.publish = AsyncMock()
@@ -64,7 +63,10 @@ class TestMQTTAdapterMessageBusIntegration:
 
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.message",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             {"error": "test"}
         )
         assert result is True
@@ -130,7 +132,11 @@ class TestMQTTAdapterCommandFlow:
     """Тестирование потока команд от шлюза к устройству."""
 
     @pytest.mark.asyncio
-    async def test_send_toggle_command(self, mqtt_adapter: MQTTAdapter):
+    async def test_send_toggle_command(
+        self,
+        topics: TopicManager,
+        mqtt_adapter: MQTTAdapter
+    ):
         """Отправка команды toggle."""
         mock_client = AsyncMock()
         mock_client.publish = AsyncMock()
@@ -148,7 +154,10 @@ class TestMQTTAdapterCommandFlow:
 
         call_args = mock_client.publish.call_args
         assert call_args is not None
-        assert call_args[1]['topic'] == f"devices/{DEVICE_DEF_ID}/command"
+        assert call_args[1]['topic'] == topics.get(
+            TopicKey.DEVICES_COMMAND,
+            device_id=DEVICE_DEF_ID
+        )
 
     @pytest.mark.asyncio
     async def test_send_config_command(self, mqtt_adapter: MQTTAdapter):
@@ -186,7 +195,11 @@ class TestMQTTAdapterErrorReporting:
     """Тестирование отправки ошибок на устройства."""
 
     @pytest.mark.asyncio
-    async def test_send_validation_error(self, mqtt_adapter: MQTTAdapter):
+    async def test_send_validation_error(
+        self,
+        topics: TopicManager,
+        mqtt_adapter: MQTTAdapter
+    ):
         """Отправка ошибки валидации."""
         mock_client = AsyncMock()
         mock_client.publish = AsyncMock()
@@ -201,7 +214,10 @@ class TestMQTTAdapterErrorReporting:
 
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.validation",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             error
         )
         assert result is True
@@ -211,7 +227,11 @@ class TestMQTTAdapterErrorReporting:
         assert "error" in call_args[1]['topic']
 
     @pytest.mark.asyncio
-    async def test_send_timeout_error(self, mqtt_adapter: MQTTAdapter):
+    async def test_send_timeout_error(
+        self,
+        topics: TopicManager,
+        mqtt_adapter: MQTTAdapter
+    ):
         """Отправка ошибки timeout."""
         mock_client = AsyncMock()
         mock_client.publish = AsyncMock()
@@ -225,13 +245,20 @@ class TestMQTTAdapterErrorReporting:
 
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.timeout",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             error
         )
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_send_connection_error(self, mqtt_adapter: MQTTAdapter):
+    async def test_send_connection_error(
+        self,
+        topics: TopicManager,
+        mqtt_adapter: MQTTAdapter
+    ):
         """Отправка ошибки подключения."""
         mock_client = AsyncMock()
         mock_client.publish = AsyncMock()
@@ -245,7 +272,10 @@ class TestMQTTAdapterErrorReporting:
 
         result = await mqtt_adapter.send_message(
             DEVICE_DEF_ID,
-            "error.connection",
+            topics.get(
+                TopicKey.ERR_MESSAGE,
+                device_id=DEVICE_DEF_ID
+            ),
             error
         )
         assert result is True
@@ -296,80 +326,6 @@ class TestMQTTAdapterQoSHandling:
 
         call_args = mock_client.publish.call_args
         assert call_args[1]['qos'] == 2
-
-
-@pytest.mark.unit
-class TestMQTTAdapterTopicHandling:
-    """Тестирование корректного формирования топиков."""
-
-    @pytest.mark.asyncio
-    async def test_command_topic_format(self, mqtt_adapter: MQTTAdapter):
-        """Формат топика для команд."""
-        mock_client = AsyncMock()
-        mock_client.publish = AsyncMock()
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = mock_client
-
-        await mqtt_adapter.send_command(DEVICE_DEF_ID, {})
-
-        call_args = mock_client.publish.call_args
-        topic = call_args[1]['topic']
-        assert topic == f"devices/{DEVICE_DEF_ID}/command"
-
-    @pytest.mark.asyncio
-    async def test_message_topic_with_dots(self, mqtt_adapter: MQTTAdapter):
-        """Преобразование точек в слэши в топике сообщения."""
-        mock_client = AsyncMock()
-        mock_client.publish = AsyncMock()
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = mock_client
-
-        await mqtt_adapter.send_message(
-            DEVICE_DEF_ID, "error.validation.field", {}
-        )
-
-        call_args = mock_client.publish.call_args
-        topic = call_args[1]['topic']
-        # devices + error.validation.field → devices/error/validation/field
-        assert "/" in topic
-        assert "\\" not in topic
-        assert topic.startswith("devices")
-
-    @pytest.mark.asyncio
-    async def test_message_topic_single_level(self, mqtt_adapter: MQTTAdapter):
-        """Топик сообщения с одним уровнем."""
-        mock_client = AsyncMock()
-        mock_client.publish = AsyncMock()
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = mock_client
-
-        await mqtt_adapter.send_message(DEVICE_DEF_ID, "error", {})
-
-        call_args = mock_client.publish.call_args
-        topic = call_args[1]['topic']
-        assert "devices" in topic
-        assert "error" in topic
-
-    @pytest.mark.asyncio
-    async def test_message_topic_multiple_levels(
-        self,
-        mqtt_adapter: MQTTAdapter
-    ):
-        """Топик сообщения с несколькими уровнями."""
-        mock_client = AsyncMock()
-        mock_client.publish = AsyncMock()
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = mock_client
-
-        await mqtt_adapter.send_message(
-            DEVICE_DEF_ID,
-            "error.sensor.temperature.out_of_range",
-            {}
-        )
-
-        call_args = mock_client.publish.call_args
-        topic = call_args[1]['topic']
-        assert topic.count("/") >= 3  # Минимум 3 слэша
 
 
 @pytest.mark.unit
@@ -459,7 +415,11 @@ class TestMQTTAdapterConcurrency:
         assert mock_client.publish.await_count == 5
 
     @pytest.mark.asyncio
-    async def test_concurrent_messages(self, mqtt_adapter: MQTTAdapter):
+    async def test_concurrent_messages(
+        self,
+        topics: TopicManager,
+        mqtt_adapter: MQTTAdapter
+    ):
         """Отправка нескольких сообщений одновременно."""
         mock_client = AsyncMock()
         mock_client.publish = AsyncMock()
@@ -469,7 +429,10 @@ class TestMQTTAdapterConcurrency:
         tasks = [
             mqtt_adapter.send_message(
                 f"dev-{i}",
-                f"error.type_{i}",
+                topics.get(
+                    TopicKey.ERR_MESSAGE,
+                    device_id=f"dev-{i}"
+                ),
                 {"error": f"error_{i}"}
             )
             for i in range(5)

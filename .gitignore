@@ -223,3 +223,4 @@ sim/
 drafts/
 config/configuration/**/*/running.yaml
 config/configuration/**/*/default.yaml
+config/configuration/**/*/testing.yaml

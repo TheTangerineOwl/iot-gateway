@@ -14,13 +14,13 @@ def temp_config_dir(tmp_path):
 
     gateway_dir = config_dir / 'gateway'
     gateway_dir.mkdir(parents=True, mode=0o777, exist_ok=True)
-    gateway_yml = gateway_dir / "default.yml"
+    gateway_yml = gateway_dir / "default.yaml"
 
     gateway_yml.touch(0o666, exist_ok=True)
     gateway_yml.write_text(
         """
 logging:
-  level: INFO
+  level: 'INFO'
   debug: false
 
 general:
@@ -74,7 +74,7 @@ def temp_config_empty_dir(tmp_path):
     """Папка с пустым конфигом."""
     config_dir = Path(tmp_path) / "empty"
 
-    empty_yml = config_dir / "default.yml"
+    empty_yml = config_dir / "default.yaml"
     config_dir.mkdir(mode=0o777, parents=True, exist_ok=True)
     empty_yml.touch(0o666, exist_ok=True)
 
@@ -152,6 +152,7 @@ class TestYAMLConfigLoaderInitialization:
         """Тест инициализации со своей папкой."""
         loader = YAMLConfigLoader('custom_config')
         assert loader.config_folder == Path('custom_config')
+        assert loader.config == {}
 
 
 class TestYAMLConfigLoaderLoading:
@@ -165,17 +166,17 @@ class TestYAMLConfigLoaderLoading:
 
     def test_load_basic_structure(self, temp_config_dir):
         """Тест загрузки базовой конфигурации."""
-        loader = YAMLConfigLoader(str(temp_config_dir))
-        config = loader.load()
+        loader = YAMLConfigLoader(temp_config_dir)
+        temp_config = loader.load()
 
         # Check root level config
-        assert 'gateway' in config
-        assert 'logging' in config['gateway']
-        assert config['gateway']['logging']['level'] == 'INFO'
-        assert config['gateway']['logging']['debug'] is False
+        assert 'gateway' in temp_config
+        assert 'logging' in temp_config['gateway']
+        assert temp_config['gateway']['logging']['level'] == 'INFO'
+        assert temp_config['gateway']['logging']['debug'] is False
 
-        assert 'gateway' in config
-        assert config['gateway']['general']['id'] == 'test_gateway'
+        assert 'gateway' in temp_config
+        assert temp_config['gateway']['general']['id'] == 'test_gateway'
 
     def test_load_adapters_config(self, temp_config_dir):
         """Тетс загрузки конфига адаптера."""
@@ -413,7 +414,14 @@ class TestIntegration:
         config = loader.load()
         merged = loader.merge_env(config, mock_env)
 
+        assert 'adapters' in merged
+        assert 'http' in merged['adapters']
+        assert 'port' in merged['adapters']['http']
         assert merged['adapters']['http']['port'] == 9090
+
+        assert 'storage' in merged
+        assert 'sqlite' in merged['storage']
+        assert 'timeout' in merged['storage']['sqlite']
         assert merged['storage']['sqlite']['timeout'] == 10
 
     def test_adapter_and_storage_access(self, temp_config_dir):
@@ -424,9 +432,14 @@ class TestIntegration:
         http_cfg = loader.get_adapter_config('http')
         sqlite_cfg = loader.get_storage_config('sqlite')
 
+        assert 'enabled' in http_cfg
         assert http_cfg['enabled'] is True
+        assert 'enabled' in sqlite_cfg
         assert sqlite_cfg['enabled'] is True
+
+        assert 'port' in http_cfg
         assert http_cfg['port'] == 8082
+        assert 'path' in sqlite_cfg
         assert sqlite_cfg['path'] == './data/app.db'
 
 

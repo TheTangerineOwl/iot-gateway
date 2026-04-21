@@ -15,6 +15,7 @@ class TopicKey(str, Enum):
     BASE_DEVICES = 'devices'
     BASE_GATEWAY = 'gateway'
     BASE_SYSTEM = 'system'
+    BASE_ERROR = 'error'
 
     DEVICES_TELEMETRY = 'devices.telemetry'
     DEVICES_REGISTER = 'devices.register'
@@ -27,6 +28,8 @@ class TopicKey(str, Enum):
 
     PROCESSED_TELEMETRY = 'gateway.pipeline.processed.telemetry'
     REJECTED_TELEMETRY = 'gateway.pipeline.rejected.telemetry'
+
+    ERR_MESSAGE = 'error.message.wdevid'
 
     SYSTEM_HEALTH = 'system.health'
     SYSTEM_METRICS = 'system.metrics'

@@ -98,9 +98,9 @@ class ProtocolAdapter(ABC):
     def _register_pending(
         self, message: Message
     ) -> asyncio.Future[Message]:
-        # loop = asyncio.get_running_loop()
-        # fut: asyncio.Future[Message] = loop.create_future()
-        fut: asyncio.Future[Message] = asyncio.get_event_loop().create_future()
+        loop = asyncio.get_running_loop()
+        # loop = asyncio.get_event_loop()
+        fut: asyncio.Future[Message] = loop.create_future()
         self._pending[message.message_id] = fut
         return fut
 

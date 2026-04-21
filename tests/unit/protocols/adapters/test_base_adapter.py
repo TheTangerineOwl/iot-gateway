@@ -3,6 +3,7 @@ import asyncio
 import pytest
 import pytest_asyncio
 from config.config import YAMLConfigLoader
+from config.topics import TopicManager, TopicKey
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from models.message import Message
@@ -117,6 +118,7 @@ class TestPublishMessage:
     @pytest.mark.unit
     async def test_publish_puts_message_on_bus(
         self,
+        topics: TopicManager,
         stub_adapter: _StubAdapter,
         running_bus: MessageBus,
         message: Message
@@ -127,9 +129,17 @@ class TestPublishMessage:
         async def _handler(m: Message) -> None:
             received.append(m)
 
-        running_bus.subscribe(f'telemetry.{message.device_id}', _handler)
+        running_bus.subscribe(
+            topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ),
+            _handler
+        )
         await stub_adapter._publish_message(
-            f'telemetry.{message.device_id}',
+            topics.get(
+                TopicKey.DEVICES_TELEMETRY,
+                device_id=message.device_id
+            ),
             message
         )
         await drain(running_bus)
@@ -140,6 +150,7 @@ class TestPublishMessage:
     @pytest.mark.unit
     async def test_publish_sets_protocol(
         self,
+        topics: TopicManager,
         stub_adapter: _StubAdapter,
         running_bus: MessageBus,
     ):
@@ -154,8 +165,19 @@ class TestPublishMessage:
         async def _handler(m: Message) -> None:
             received.append(m)
 
-        running_bus.subscribe(f'telemetry.{device_id}', _handler)
-        await stub_adapter._publish_message(f'telemetry.{device_id}', msg)
+        running_bus.subscribe(
+            topics.get_subscription_pattern(
+                TopicKey.DEVICES_TELEMETRY
+            ),
+            _handler
+        )
+        await stub_adapter._publish_message(
+            topics.get(
+                TopicKey.DEVICES_TELEMETRY,
+                device_id=msg.device_id
+            ),
+            msg
+        )
         await drain(running_bus)
 
         assert received[0].protocol == ProtocolType.HTTP
@@ -178,7 +200,8 @@ class TestRegisterPending:
     """Тесты метода _register_pending."""
 
     @pytest.mark.unit
-    def test_future_is_stored(
+    @pytest.mark.asyncio
+    async def test_future_is_stored(
         self,
         stub_adapter: _StubAdapter,
         telemetry_message: Message
@@ -189,7 +212,8 @@ class TestRegisterPending:
         assert stub_adapter._pending[telemetry_message.message_id] is fut
 
     @pytest.mark.unit
-    def test_returns_future(
+    @pytest.mark.asyncio
+    async def test_returns_future(
         self,
         stub_adapter: _StubAdapter,
         telemetry_message: Message
