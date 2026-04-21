@@ -1,11 +1,11 @@
 """Шина сообщений для взаимодействия."""
 import asyncio
-from fnmatch import fnmatch
 from dataclasses import dataclass
 import logging
 from models.message import Message
 from typing import Any, Callable, Coroutine
 from config.config import get_conf, YAMLConfigLoader
+from config.topics import TopicManager
 
 
 logger = logging.getLogger(__name__)
@@ -24,9 +24,9 @@ class Subscription:
         Проверка темы сообщения.
 
         Проверяет, соответствует ли тема сообщению заданной теме подписки
-        с поддержкой wildcard (* в теме).
+        с поддержкой wildcard (* или + в теме).
         """
-        return fnmatch(topic, self.mes_topic)
+        return TopicManager.matches(topic, self.mes_topic)
 
 
 class MessageBus:
@@ -35,6 +35,8 @@ class MessageBus:
     def __init__(self, config: YAMLConfigLoader):
         """Шина сообщений."""
         self._config = config
+        self.topics = TopicManager(config)
+
         self._queue: asyncio.Queue[tuple[str, Message]] = asyncio.Queue(
             maxsize=int(get_conf(
                 self._config,

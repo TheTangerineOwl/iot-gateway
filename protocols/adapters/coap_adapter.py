@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Any
 from config.config import YAMLConfigLoader
+from config.topics import TopicKey
 from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
@@ -48,30 +49,38 @@ class _IngestResource(resource.Resource):
             )
         sub = None
         try:
-
-            message = MessageBuilder.normalize(
-                body,
-                protocol=self._adapter.protocol_type,
-                topic=self._adapter.url_ingest,
-                message_type=MessageType.TELEMETRY
-            )
-
+            message: Message | None = None
             if not self._adapter._bus:
                 raise RuntimeError(
                     f'Adapter {self._adapter.protocol_name} not '
                     'connected to message bus.'
                 )
+
+            message = MessageBuilder.normalize(
+                body,
+                protocol=self._adapter.protocol_type,
+                topic=self._adapter.get_topic(
+                    TopicKey.DEVICES_TELEMETRY,
+                    device_id=device_id
+                ),
+                message_type=MessageType.TELEMETRY
+            )
+
             sub = self._adapter._bus.subscribe(
-                f'rejected.telemetry.{device_id}',
+                self._adapter.get_topic(
+                    TopicKey.REJECTED_TELEMETRY,
+                    device_id=device_id
+                ),
                 self._adapter._handle_rejected_base
             )
             fut = self._adapter._register_pending(message)
 
             await self._adapter._publish_message(
-                f'telemetry.{device_id}', message
+                message.message_topic, message
             )
         except RuntimeError as exc:
-            self._adapter._pending.pop(message.message_id, None)
+            if message:
+                self._adapter._pending.pop(message.message_id, None)
             logger.error('CoAP ingest: publish error — %s', exc)
             if sub and self._adapter._bus:
                 self._adapter._bus.unsubscribe(sub)
@@ -141,17 +150,31 @@ class _RegisterResource(resource.Resource):
                 content_format=ContentFormat.JSON,
             )
 
+        device_id = body.get('device_id', None)
+
+        if not device_id:
+            logger.error('CoAP register: device_id is required')
+            return aiocoap.Message(
+                code=aiocoap.BAD_REQUEST,
+                payload=json.dumps(
+                    MessageBuilder.err_miss_dev_id()
+                ).encode(),
+                content_format=ContentFormat.JSON,
+            )
+
         message = MessageBuilder.normalize(
             body,
             protocol=self._adapter.protocol_type,
-            topic=self._adapter.url_register,
+            topic=self._adapter.get_topic(
+                TopicKey.DEVICES_REGISTER,
+                device_id=device_id
+            ),
             message_type=MessageType.REGISTRATION
         )
-        message.message_topic = f'device.register.{message.device_id}'
 
         try:
             await self._adapter._publish_message(
-                f'device.register.{message.device_id}', message
+                message.message_topic, message
             )
         except RuntimeError as exc:
             logger.error('CoAP register: publish error — %s', exc)

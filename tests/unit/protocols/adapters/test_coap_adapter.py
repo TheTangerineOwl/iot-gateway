@@ -1,7 +1,9 @@
 """Юнит-тесты для CoAPAdapter."""
 import aiocoap
 import pytest
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
+from config.topics import TopicKey, TopicManager
 from models.message import Message, MessageType
 from models.device import ProtocolType
 from protocols.adapters.coap_adapter import (
@@ -238,12 +240,15 @@ class TestIngestResource:
             )
             await ingest.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            mock_adapter._bus.publish.assert_awaited_once()
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish.assert_awaited_once()
 
         @pytest.mark.asyncio
-        async def test_publish_topic(self, mock_adapter: CoAPAdapter):
+        async def test_publish_topic(
+            self,
+            topics: TopicManager,
+            mock_adapter: CoAPAdapter
+        ):
             """Топик публикации строится как 'telemetry.<device_id>'."""
             ingest = _IngestResource(mock_adapter)
             req = coap_request(
@@ -251,10 +256,14 @@ class TestIngestResource:
             )
             await ingest.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            topic, _ = mock_adapter._bus.publish.call_args.args
-            assert topic == "telemetry.dev-42"
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish.assert_awaited_once()
+
+            topic, _ = bus.publish.call_args.args
+            assert topic == topics.get(
+                TopicKey.DEVICES_TELEMETRY,
+                device_id="dev-42"
+            )
 
         @pytest.mark.asyncio
         async def test_published_message_type(self, mock_adapter: CoAPAdapter):
@@ -265,9 +274,8 @@ class TestIngestResource:
             )
             await ingest.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            _, msg = mock_adapter._bus.publish.call_args.args
+            bus = cast(MagicMock, mock_adapter._bus)
+            _, msg = bus.publish.call_args.args
             assert msg.message_type == MessageType.TELEMETRY
 
         @pytest.mark.asyncio
@@ -281,9 +289,8 @@ class TestIngestResource:
             )
             await ingest.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            _, msg = mock_adapter._bus.publish.call_args.args
+            bus = cast(MagicMock, mock_adapter._bus)
+            _, msg = bus.publish.call_args.args
             assert msg.device_id == "dev-42"
 
         @pytest.mark.asyncio
@@ -297,27 +304,28 @@ class TestIngestResource:
             )
             await ingest.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            _, msg = mock_adapter._bus.publish.call_args.args
+            bus = cast(MagicMock, mock_adapter._bus)
+            _, msg = bus.publish.call_args.args
             assert msg.protocol == ProtocolType.COAP
 
         @pytest.mark.asyncio
         async def test_subscribes_to_rejected_topic(
-            self, mock_adapter: CoAPAdapter
+            self, topics: TopicManager, mock_adapter: CoAPAdapter
         ):
-            """Перед публикацией создаётся подписка на rejected.telemetry.*."""
+            """Перед публикацией создаётся подписка на REJECTED_TELEMETRY."""
             ingest = _IngestResource(mock_adapter)
             req = coap_request(
                 json_payload({"device_id": "dev-42"})
             )
             await ingest.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.subscribe, MagicMock)
-            subscribe_calls = mock_adapter._bus.subscribe.call_args_list
-            topics = [c.args[0] for c in subscribe_calls]
-            assert any("rejected.telemetry.dev-42" in t for t in topics)
+            bus = cast(MagicMock, mock_adapter._bus)
+            subscribe_calls = bus.subscribe.call_args_list
+            topics_in = [c.args[0] for c in subscribe_calls]
+            assert any(
+                topics.get(TopicKey.REJECTED_TELEMETRY, device_id="dev-42")
+                in t for t in topics_in
+            )
 
         @pytest.mark.asyncio
         async def test_unsubscribes_after_success(
@@ -330,9 +338,8 @@ class TestIngestResource:
             )
             await ingest.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.unsubscribe, MagicMock)
-            mock_adapter._bus.unsubscribe.assert_called()
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.unsubscribe.assert_called()
 
     class TestRejection:
         """Сообщение отклонено пайплайном."""
@@ -357,9 +364,8 @@ class TestIngestResource:
                     )
                     fut.set_result(rejected)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus, MagicMock)
-            mock_adapter._bus.publish = AsyncMock(
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish = AsyncMock(
                 side_effect=_publish_and_reject
             )
             mock_adapter._timeout_reject = 2.0
@@ -390,9 +396,8 @@ class TestIngestResource:
                     )
                     fut.set_result(rejected)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus, MagicMock)
-            mock_adapter._bus.publish = AsyncMock(
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish = AsyncMock(
                 side_effect=_publish_and_reject
             )
             mock_adapter._timeout_reject = 2.0
@@ -516,9 +521,8 @@ class TestIngestResource:
             self, mock_adapter: CoAPAdapter
         ):
             """Ошибка при publish вернет INTERNAL_SERVER_ERROR."""
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus, MagicMock)
-            mock_adapter._bus.publish = AsyncMock(
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish = AsyncMock(
                 side_effect=RuntimeError("boom")
             )
             ingest = _IngestResource(mock_adapter)
@@ -533,9 +537,8 @@ class TestIngestResource:
             self, mock_adapter: CoAPAdapter
         ):
             """При ошибке публикации future удаляется из _pending."""
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus, MagicMock)
-            mock_adapter._bus.publish = AsyncMock(
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish = AsyncMock(
                 side_effect=RuntimeError("boom")
             )
             ingest = _IngestResource(mock_adapter)
@@ -594,12 +597,15 @@ class TestRegisterResource:
             )
             await register.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            mock_adapter._bus.publish.assert_awaited_once()
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish.assert_awaited_once()
 
         @pytest.mark.asyncio
-        async def test_publish_topic(self, mock_adapter: CoAPAdapter):
+        async def test_publish_topic(
+            self,
+            topics: TopicManager,
+            mock_adapter: CoAPAdapter
+        ):
             """Топик публикации — 'device.register.<device_id>'."""
             register = _RegisterResource(mock_adapter)
             req = coap_request(
@@ -607,10 +613,12 @@ class TestRegisterResource:
             )
             await register.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            topic, _ = mock_adapter._bus.publish.call_args.args
-            assert topic == "device.register.dev-99"
+            bus = cast(MagicMock, mock_adapter._bus)
+            topic, _ = bus.publish.call_args.args
+            assert topic == topics.get(
+                TopicKey.DEVICES_REGISTER,
+                device_id="dev-99"
+            )
 
         @pytest.mark.asyncio
         async def test_published_message_type(self, mock_adapter: CoAPAdapter):
@@ -621,9 +629,8 @@ class TestRegisterResource:
             )
             await register.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            _, msg = mock_adapter._bus.publish.call_args.args
+            bus = cast(MagicMock, mock_adapter._bus)
+            _, msg = bus.publish.call_args.args
             assert msg.message_type == MessageType.REGISTRATION
 
         @pytest.mark.asyncio
@@ -637,14 +644,13 @@ class TestRegisterResource:
             )
             await register.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            _, msg = mock_adapter._bus.publish.call_args.args
+            bus = cast(MagicMock, mock_adapter._bus)
+            _, msg = bus.publish.call_args.args
             assert msg.protocol == ProtocolType.COAP
 
         @pytest.mark.asyncio
         async def test_message_topic_set_correctly(
-            self, mock_adapter: CoAPAdapter
+            self, topics: TopicManager, mock_adapter: CoAPAdapter
         ):
             """message_topic в сообщении совпадает с топиком публикации."""
             register = _RegisterResource(mock_adapter)
@@ -653,10 +659,12 @@ class TestRegisterResource:
             )
             await register.render_post(req)
 
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus.publish, AsyncMock)
-            _, msg = mock_adapter._bus.publish.call_args.args
-            assert msg.message_topic == "device.register.dev-99"
+            bus = cast(MagicMock, mock_adapter._bus)
+            _, msg = bus.publish.call_args.args
+            assert msg.message_topic == topics.get(
+                TopicKey.DEVICES_REGISTER,
+                device_id="dev-99"
+            )
 
     class TestBadRequest:
         """Некорректные входящие данные при регистрации."""
@@ -698,9 +706,8 @@ class TestRegisterResource:
             self, mock_adapter: CoAPAdapter
         ):
             """Ошибка при publish вернет INTERNAL_SERVER_ERROR."""
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus, MagicMock)
-            mock_adapter._bus.publish = AsyncMock(
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish = AsyncMock(
                 side_effect=RuntimeError("bus down")
             )
             register = _RegisterResource(mock_adapter)
@@ -713,9 +720,8 @@ class TestRegisterResource:
         @pytest.mark.asyncio
         async def test_internal_error_body(self, mock_adapter: CoAPAdapter):
             """Тело INTERNAL_SERVER_ERROR содержит status='error'."""
-            assert mock_adapter._bus is not None
-            assert isinstance(mock_adapter._bus, MagicMock)
-            mock_adapter._bus.publish = AsyncMock(
+            bus = cast(MagicMock, mock_adapter._bus)
+            bus.publish = AsyncMock(
                 side_effect=RuntimeError("bus down")
             )
             register = _RegisterResource(mock_adapter)

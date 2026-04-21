@@ -6,6 +6,7 @@ from aiohttp.test_utils import TestClient
 from http import HTTPStatus
 from unittest.mock import AsyncMock, patch
 from protocols.adapters.websocket_adapter import WebSocketAdapter
+from config.topics import TopicKey, TopicManager
 from core.message_bus import MessageBus
 from models.message import MessageType, Message
 from models.device import ProtocolType
@@ -13,10 +14,6 @@ from tests.conftest import (
     drain,
     not_raises,
     DEVICE_DEF_ID,
-    TOPIC_TELEMETRY_WC,
-    TOPIC_TELEMETRY,
-    TOPIC_REGISTER_WC,
-    TOPIC_REGISTER,
 )
 from tests.unit.protocols.adapters.conftest import (
     WS_TELEMETRY_BODY,
@@ -70,6 +67,7 @@ class TestWebSocketAdapter:
         """Тесты жизненного цикла адаптера."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_start_sets_running(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -87,6 +85,7 @@ class TestWebSocketAdapter:
                 await ws_adapter.stop()
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_stop_clears_running(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -104,6 +103,7 @@ class TestWebSocketAdapter:
                 assert ws_adapter._running is False
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_stop_closes_active_connections(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -127,6 +127,7 @@ class TestWebSocketAdapter:
             assert ws_adapter._connections == {}
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_stop_with_failing_close_does_not_raise(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -150,6 +151,7 @@ class TestWebSocketAdapter:
             assert ws_adapter._connections == {}
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_stop_without_start_does_not_raise(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -162,6 +164,7 @@ class TestWebSocketAdapter:
         """Тесты WS-обработки телеметрии."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_telemetry_returns_accepted(
             self,
             ws_client: TestClient,
@@ -174,6 +177,7 @@ class TestWebSocketAdapter:
             assert responses[0]['status'] == 'accepted'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_telemetry_response_contains_message_id(
             self,
             ws_client: TestClient,
@@ -186,6 +190,7 @@ class TestWebSocketAdapter:
             assert 'message_id' in responses[0]
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_telemetry_response_contains_timestamp(
             self,
             ws_client: TestClient,
@@ -198,8 +203,10 @@ class TestWebSocketAdapter:
             assert 'timestamp' in responses[0]
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_telemetry_publishes_to_bus(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_telemetry: str,
             running_bus: MessageBus,
@@ -211,7 +218,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_TELEMETRY % DEVICE_DEF_ID,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_TELEMETRY
+                ),
                 lambda m: _handler(m),
             )
             await _ws_exchange(
@@ -226,8 +235,10 @@ class TestWebSocketAdapter:
             assert received[0].device_id == DEVICE_DEF_ID
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_telemetry_message_topic(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_telemetry: str,
             running_bus: MessageBus,
@@ -239,7 +250,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_TELEMETRY_WC,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_TELEMETRY
+                ),
                 lambda m: _handler(m),
             )
             await _ws_exchange(
@@ -249,11 +262,16 @@ class TestWebSocketAdapter:
             )
             await drain(running_bus)
 
-            assert received[0].message_topic == TOPIC_TELEMETRY % DEVICE_DEF_ID
+            assert received[0].message_topic == topics.get(
+                TopicKey.DEVICES_TELEMETRY,
+                device_id=DEVICE_DEF_ID
+            )
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_telemetry_protocol_set_to_websocket(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_telemetry: str,
             running_bus: MessageBus,
@@ -265,7 +283,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_TELEMETRY_WC,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_TELEMETRY
+                ),
                 lambda m: _handler(m),
             )
             await _ws_exchange(
@@ -278,8 +298,10 @@ class TestWebSocketAdapter:
             assert received[0].protocol == ProtocolType.WEBSOCKET
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_telemetry_default_type_when_omitted(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_telemetry: str,
             running_bus: MessageBus,
@@ -291,7 +313,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_TELEMETRY_WC,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_TELEMETRY
+                ),
                 lambda m: _handler(m),
             )
             await _ws_exchange(
@@ -308,6 +332,7 @@ class TestWebSocketAdapter:
         """Тесты WS-обработки heartbeat."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_heartbeat_returns_ok(
             self,
             ws_client: TestClient,
@@ -320,8 +345,10 @@ class TestWebSocketAdapter:
             assert responses[0]['status'] == 'ok'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_heartbeat_publishes_to_bus(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_telemetry: str,
             running_bus: MessageBus,
@@ -333,7 +360,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                'device.heartbeat.*',
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_HEARTBEAT
+                ),
                 lambda m: _handler(m),
             )
             await _ws_exchange(
@@ -348,8 +377,10 @@ class TestWebSocketAdapter:
             assert received[0].device_id == DEVICE_DEF_ID
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_heartbeat_message_topic(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_telemetry: str,
             running_bus: MessageBus,
@@ -361,7 +392,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                'device.heartbeat.*',
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_HEARTBEAT
+                ),
                 lambda m: _handler(m),
             )
             await _ws_exchange(
@@ -373,13 +406,17 @@ class TestWebSocketAdapter:
 
             assert (
                 received[0].message_topic
-                == f'device.heartbeat.{DEVICE_DEF_ID}'
+                == topics.get(
+                    TopicKey.DEVICES_HEARTBEAT,
+                    device_id=DEVICE_DEF_ID
+                )
             )
 
     class TestWsRegister:
         """Тесты WS-регистрации."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_register_returns_registered(
             self,
             ws_client: TestClient,
@@ -392,8 +429,10 @@ class TestWebSocketAdapter:
             assert responses[0]['status'] == 'registered'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_register_publishes_to_bus(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_register: str,
             running_bus: MessageBus,
@@ -405,7 +444,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_REGISTER_WC,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_REGISTER
+                ),
                 lambda m: _handler(m),
             )
             await _ws_exchange(ws_client, ws_url_register, [WS_REGISTER_BODY])
@@ -416,8 +457,10 @@ class TestWebSocketAdapter:
             assert received[0].device_id == DEVICE_DEF_ID
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_register_message_topic(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_register: str,
             running_bus: MessageBus,
@@ -429,15 +472,21 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_REGISTER_WC,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_REGISTER
+                ),
                 lambda m: _handler(m),
             )
             await _ws_exchange(ws_client, ws_url_register, [WS_REGISTER_BODY])
             await drain(running_bus)
 
-            assert received[0].message_topic == TOPIC_REGISTER % DEVICE_DEF_ID
+            assert received[0].message_topic == topics.get(
+                TopicKey.DEVICES_REGISTER,
+                device_id=DEVICE_DEF_ID
+            )
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_register_response_contains_message_id(
             self,
             ws_client: TestClient,
@@ -453,6 +502,7 @@ class TestWebSocketAdapter:
         """Тесты WS-ответов на некорректный ввод."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_invalid_json_returns_error_status(
             self,
             ws_client: TestClient,
@@ -465,6 +515,7 @@ class TestWebSocketAdapter:
             assert resp.get('status') == 'error'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_invalid_json_returns_error_code(
             self,
             ws_client: TestClient,
@@ -477,6 +528,7 @@ class TestWebSocketAdapter:
             assert resp.get('error_code') == 'INVALID_JSON'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_missing_device_id_returns_error_status(
             self,
             ws_client: TestClient,
@@ -491,6 +543,7 @@ class TestWebSocketAdapter:
             assert resp.get('status') == 'error'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_missing_device_id_returns_error_code(
             self,
             ws_client: TestClient,
@@ -503,6 +556,7 @@ class TestWebSocketAdapter:
             assert resp.get('error_code') == 'MISSING_DEVICE_ID'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_unknown_message_type_returns_error_status(
             self,
             ws_client: TestClient,
@@ -517,6 +571,7 @@ class TestWebSocketAdapter:
             assert responses[0].get('status') == 'error'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_unknown_message_type_returns_error_code(
             self,
             ws_client: TestClient,
@@ -531,6 +586,7 @@ class TestWebSocketAdapter:
             assert responses[0].get('error_code') == 'UNKNOWN_TYPE'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_empty_device_id_string_returns_error(
             self,
             ws_client: TestClient,
@@ -549,6 +605,7 @@ class TestWebSocketAdapter:
         """Тесты управления WS-соединениями."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_connection_registered_after_first_message(
             self,
             ws_client: TestClient,
@@ -562,6 +619,7 @@ class TestWebSocketAdapter:
                 assert DEVICE_DEF_ID in ws_adapter._connections
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_connection_removed_after_close(
             self,
             ws_client: TestClient,
@@ -577,6 +635,7 @@ class TestWebSocketAdapter:
             assert DEVICE_DEF_ID not in ws_adapter._connections
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_multiple_messages_keep_single_connection_entry(
             self,
             ws_client: TestClient,
@@ -596,6 +655,7 @@ class TestWebSocketAdapter:
             assert count <= 1
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_connections_count_increases_with_active_ws(
             self,
             ws_client: TestClient,
@@ -616,6 +676,7 @@ class TestWebSocketAdapter:
         """Тесты HTTP-регистрации устройства."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_valid_register_returns_201(
             self,
             ws_client: TestClient,
@@ -629,6 +690,7 @@ class TestWebSocketAdapter:
             assert resp.status == HTTPStatus.CREATED
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_valid_register_body_contains_status_registered(
             self,
             ws_client: TestClient,
@@ -643,6 +705,7 @@ class TestWebSocketAdapter:
             assert data['status'] == 'registered'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_valid_register_body_contains_message_id(
             self,
             ws_client: TestClient,
@@ -657,6 +720,7 @@ class TestWebSocketAdapter:
             assert 'message_id' in data
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_invalid_json_returns_400(
             self,
             ws_client: TestClient,
@@ -671,6 +735,7 @@ class TestWebSocketAdapter:
             assert resp.status == HTTPStatus.BAD_REQUEST
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_invalid_json_body_contains_error_status(
             self,
             ws_client: TestClient,
@@ -686,6 +751,7 @@ class TestWebSocketAdapter:
             assert data.get('status') == 'error'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_invalid_json_body_contains_error_code(
             self,
             ws_client: TestClient,
@@ -701,8 +767,10 @@ class TestWebSocketAdapter:
             assert data.get('error_code') == 'INVALID_JSON'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_publishes_registration_to_bus(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_register: str,
             running_bus: MessageBus,
@@ -714,7 +782,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_REGISTER_WC,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_REGISTER
+                ),
                 lambda m: _handler(m),
             )
             await ws_client.post(ws_url_register, json=HTTP_REGISTER_BODY)
@@ -725,8 +795,10 @@ class TestWebSocketAdapter:
             assert received[0].device_id == DEVICE_DEF_ID
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_message_topic_set_correctly(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_register: str,
             running_bus: MessageBus,
@@ -738,17 +810,24 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_REGISTER_WC,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_REGISTER
+                ),
                 lambda m: _handler(m),
             )
             await ws_client.post(ws_url_register, json=HTTP_REGISTER_BODY)
             await drain(running_bus)
 
-            assert received[0].message_topic == TOPIC_REGISTER % DEVICE_DEF_ID
+            assert received[0].message_topic == topics.get(
+                TopicKey.DEVICES_REGISTER,
+                device_id=DEVICE_DEF_ID
+            )
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_registration_protocol_set_to_websocket(
             self,
+            topics: TopicManager,
             ws_client: TestClient,
             ws_url_register: str,
             running_bus: MessageBus,
@@ -760,7 +839,9 @@ class TestWebSocketAdapter:
                 received.append(msg)
 
             running_bus.subscribe(
-                TOPIC_REGISTER_WC,
+                topics.get_subscription_pattern(
+                    TopicKey.DEVICES_REGISTER
+                ),
                 lambda m: _handler(m),
             )
             await ws_client.post(ws_url_register, json=HTTP_REGISTER_BODY)
@@ -772,6 +853,7 @@ class TestWebSocketAdapter:
         """Тесты HTTP-эндпоинта /health."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_returns_200(
             self,
             ws_client: TestClient,
@@ -782,6 +864,7 @@ class TestWebSocketAdapter:
             assert resp.status == HTTPStatus.OK
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_contains_protocol(
             self,
             ws_client: TestClient,
@@ -793,6 +876,7 @@ class TestWebSocketAdapter:
             assert data['protocol'] == 'WebSocket'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_contains_running(
             self,
             ws_client: TestClient,
@@ -804,6 +888,7 @@ class TestWebSocketAdapter:
             assert 'running' in data
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_running_true_when_adapter_running(
             self,
             ws_client: TestClient,
@@ -815,6 +900,7 @@ class TestWebSocketAdapter:
             assert data['running'] is True
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_contains_connections_field(
             self,
             ws_client: TestClient,
@@ -826,6 +912,7 @@ class TestWebSocketAdapter:
             assert 'connections' in data
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_connections_zero_initially(
             self,
             ws_client: TestClient,
@@ -837,6 +924,7 @@ class TestWebSocketAdapter:
             assert data['connections'] == 0
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_connections_count_increases_with_active_ws(
             self,
             ws_client: TestClient,
@@ -857,6 +945,7 @@ class TestWebSocketAdapter:
         """Тесты метода _health_check() (без HTTP)."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_check_returns_dict(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -865,6 +954,7 @@ class TestWebSocketAdapter:
             assert isinstance(result, dict)
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_check_protocol_name(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -873,6 +963,7 @@ class TestWebSocketAdapter:
             assert result['protocol'] == 'WebSocket'
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_check_contains_running(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -881,6 +972,7 @@ class TestWebSocketAdapter:
             assert 'running' in result
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_check_running_reflects_state(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -894,6 +986,7 @@ class TestWebSocketAdapter:
             assert result['running'] is False
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_check_connections_zero_initially(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -902,6 +995,7 @@ class TestWebSocketAdapter:
             assert isinstance(result, dict)
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_health_check_connections_reflects_active(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -919,6 +1013,7 @@ class TestWebSocketAdapter:
         """Тесты метода _handle_rejected()."""
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_handle_rejected_sends_to_open_connection(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -946,6 +1041,7 @@ class TestWebSocketAdapter:
             del ws_adapter._connections[DEVICE_DEF_ID]
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_handle_rejected_skips_closed_connection(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -964,6 +1060,7 @@ class TestWebSocketAdapter:
             del ws_adapter._connections[DEVICE_DEF_ID]
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_handle_rejected_skips_unknown_device(
             self, ws_adapter: WebSocketAdapter
         ):
@@ -976,6 +1073,7 @@ class TestWebSocketAdapter:
                 await ws_adapter._handle_rejected(msg)
 
         @pytest.mark.unit
+        @pytest.mark.asyncio
         async def test_handle_rejected_uses_default_reason(
             self, ws_adapter: WebSocketAdapter
         ):

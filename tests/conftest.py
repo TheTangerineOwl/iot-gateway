@@ -2,11 +2,14 @@
 from contextlib import contextmanager
 import asyncio
 import logging
+from pathlib import Path
 import pytest
 import pytest_asyncio
 import psycopg
+from typenv import Env
 from unittest.mock import AsyncMock
-from config.config import YAMLConfigLoader
+from config.config import YAMLConfigLoader, setup_logging, load_env
+from config.topics import TopicManager
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
 from core.pipeline.pipeline import Pipeline
@@ -24,7 +27,6 @@ REGISTRY_STALE_TIMEOUT = 120.0
 
 # MessageBus
 BUS_MAX_QUEUE = 100
-BUS_DISPATCH_WAIT = 0.05
 
 # Тестовые устройства
 DEVICE_DEF_ID = "dev-001"
@@ -41,12 +43,6 @@ MSG_DEF_TYPE = MessageType.TELEMETRY
 MSG_DEF_PAYLOAD = {"temp": 42.0}
 MSG_DEF_META = {'meta': 'test'}
 MSG_DEF_SCHEMA = '1.0'
-
-# Топики
-TOPIC_TELEMETRY_WC = 'telemetry.*'
-TOPIC_TELEMETRY = 'telemetry.%s'
-TOPIC_REGISTER_WC = 'device.register.*'
-TOPIC_REGISTER = 'device.register.%s'
 
 
 @contextmanager
@@ -108,21 +104,50 @@ skip_no_postgres = pytest.mark.skipif(
 )
 
 
-async def drain(bus: MessageBus) -> None:
+async def drain(bus: MessageBus, wait_time: float = 0.05) -> None:
     """Ждет, пока очередь опустеет."""
-    deadline = asyncio.get_event_loop().time() + BUS_DISPATCH_WAIT
+    deadline = asyncio.get_event_loop().time() + wait_time
     while bus._queue.qsize() > 0:
         if asyncio.get_event_loop().time() > deadline:
             raise TimeoutError('Bus queue did not drain')
         await asyncio.sleep(0)
 
 
-@pytest.fixture(scope='session')
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_PATH = BASE_DIR / '.env.testing'
+CONFIG_PATH = BASE_DIR / 'config' / 'configuration'
+
+
+@pytest.fixture(autouse=True, scope='session')
 def config():
     """Возвращает пустой конфиг."""
-    loader = YAMLConfigLoader()
-    loader.config = {'gateway': {'message_bus': {'max_queue': BUS_MAX_QUEUE}}}
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    loader = YAMLConfigLoader(folder=CONFIG_PATH, testing=True)
+    config = loader.load()
+    env = Env(upper=True)
+    load_env(ENV_PATH)
+
+    if env is not None:
+        config = loader.merge_env(config, env)
+
+    setup_logging(config)
     yield loader
+
+
+@pytest.fixture(autouse=True, scope='session')
+def topics(config):
+    """Возвращает менеджер топиков."""
+    topic = TopicManager(config)
+    yield topic
+
+
+# @pytest.fixture(scope='session')
+# def constants(config):
+#     return {
+#         'BUS_MAX_Q': get_conf(config, 'gateway.message_bus.max_queue', 20)
+#     }
 
 
 @pytest.fixture

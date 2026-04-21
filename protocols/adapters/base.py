@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Any
 from config.config import YAMLConfigLoader
+from config.topics import TopicKey, TopicManager
 from models.message import Message
 from models.device import ProtocolType
 from core.message_bus import MessageBus
@@ -20,6 +21,7 @@ class ProtocolAdapter(ABC):
         """Конструктор адаптера."""
         self._config: YAMLConfigLoader = config
         self._bus: MessageBus | None = None
+        self._topics: TopicManager | None = None
         self._registry: DeviceRegistry | None = None
         self._running = False
         self._pending: dict[str, asyncio.Future[Message]] = {}
@@ -51,13 +53,36 @@ class ProtocolAdapter(ABC):
         return self._running
 
     def set_gateway_context(
-            self,
-            message_bus: MessageBus,
-            registry: DeviceRegistry
+        self,
+        message_bus: MessageBus,
+        registry: DeviceRegistry
     ) -> None:
         """Установить контекст работы адаптера."""
         self._bus = message_bus
+        self._topics = self._bus.topics
         self._registry = registry
+
+    def get_topic(
+        self,
+        key: TopicKey | str,
+        default: Any | None = None,
+        **kwargs: str
+    ) -> str:
+        """Возвращает стандартный топик."""
+        if self._topics is None:
+            raise RuntimeError('Topics for adapter are not set')
+        return self._topics.get(
+            key, default, **kwargs
+        )
+
+    def get_sub_pattern(
+        self,
+        key: TopicKey | str
+    ) -> str:
+        """Возвращает стандартный топик для подписки."""
+        if self._topics is None:
+            raise RuntimeError('Topics for adapter are not set')
+        return self._topics.get_subscription_pattern(key)
 
     async def _publish_message(
         self, message_type: str, message: Message
@@ -73,9 +98,9 @@ class ProtocolAdapter(ABC):
     def _register_pending(
         self, message: Message
     ) -> asyncio.Future[Message]:
-        # loop = asyncio.get_running_loop()
-        # fut: asyncio.Future[Message] = loop.create_future()
-        fut: asyncio.Future[Message] = asyncio.get_event_loop().create_future()
+        loop = asyncio.get_running_loop()
+        # loop = asyncio.get_event_loop()
+        fut: asyncio.Future[Message] = loop.create_future()
         self._pending[message.message_id] = fut
         return fut
 

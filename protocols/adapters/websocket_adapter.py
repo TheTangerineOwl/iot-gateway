@@ -15,6 +15,7 @@ from http import HTTPStatus
 from typenv import Env
 from typing import Any
 from config.config import YAMLConfigLoader
+from config.topics import TopicKey
 from models.message import MessageType, Message
 from models.device import ProtocolType
 from protocols.adapters.base import ProtocolAdapter
@@ -212,7 +213,12 @@ class WebSocketAdapter(ProtocolAdapter):
             if device_id and self._connections.get(device_id) is ws:
                 del self._connections[device_id]
                 assert self._bus is not None
-                self._bus.unsubscribe_from(f'rejected.telemetry.{device_id}')
+                self._bus.unsubscribe_from(
+                    self.get_topic(
+                        TopicKey.REJECTED_TELEMETRY,
+                        device_id=device_id
+                    )
+                )
                 logger.debug(
                     "WebSocket connection closed for device '%s'",
                     device_id,
@@ -230,16 +236,26 @@ class WebSocketAdapter(ProtocolAdapter):
                 status=HTTPStatus.BAD_REQUEST,
             )
 
+        device_id = body.get('device_id', '')
+
+        if not device_id:
+            return web.json_response(
+                MessageBuilder.err_miss_dev_id(),
+                status=HTTPStatus.BAD_REQUEST,
+            )
+
         message = MessageBuilder.normalize(
             body,
             protocol=self.protocol_type,
             proto_meta=self._build_meta(request),
-            topic=self._url_register,
+            topic=self.get_topic(
+                TopicKey.DEVICES_REGISTER,
+                device_id=device_id
+            ),
             message_type=MessageType.REGISTRATION
         )
-        message.message_topic = f'device.register.{message.device_id}'
         await self._publish_message(
-            f'device.register.{message.device_id}', message
+            message.message_topic, message
         )
 
         logger.log(5, 'WebSocket HTTP-register: %s', message.to_dict())
@@ -306,7 +322,10 @@ class WebSocketAdapter(ProtocolAdapter):
                     'connected to message bus.'
                 )
             self._bus.subscribe(
-                f'rejected.telemetry.{device_id}',
+                self.get_topic(
+                    TopicKey.REJECTED_TELEMETRY,
+                    device_id=device_id
+                ),
                 self._handle_rejected
             )
             logger.debug(
@@ -352,9 +371,12 @@ class WebSocketAdapter(ProtocolAdapter):
             body=body,
             protocol=self.protocol_type,
             proto_meta=meta,
-            topic=f'telemetry.{device_id}'
+            topic=self.get_topic(
+                TopicKey.DEVICES_TELEMETRY,
+                device_id=device_id
+            )
         )
-        await self._publish_message(f'telemetry.{device_id}', message)
+        await self._publish_message(message.message_topic, message)
 
         logger.log(5, 'WebSocket telemetry: %s', message.to_dict())
 
@@ -376,11 +398,14 @@ class WebSocketAdapter(ProtocolAdapter):
             body,
             protocol=self.protocol_type,
             proto_meta=meta,
-            topic=f'device.heartbeat.{device_id}',
+            topic=self.get_topic(
+                TopicKey.DEVICES_HEARTBEAT,
+                device_id=device_id
+            ),
             message_type=MessageType.HEARTBEAT
         )
         await self._publish_message(
-            f'device.heartbeat.{device_id}', message
+            message.message_topic, message
         )
 
         logger.log(5, "WebSocket heartbeat from device '%s'", device_id)
@@ -402,10 +427,13 @@ class WebSocketAdapter(ProtocolAdapter):
             protocol=self.protocol_type,
             proto_meta=meta,
             message_type=MessageType.REGISTRATION,
-            topic=f'device.register.{device_id}'
+            topic=self.get_topic(
+                TopicKey.DEVICES_REGISTER,
+                device_id=device_id
+            )
         )
         await self._publish_message(
-            f'device.register.{device_id}', message
+            message.message_topic, message
         )
 
         logger.log(5, 'WebSocket register: %s', message.to_dict())

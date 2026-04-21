@@ -157,6 +157,7 @@ ENV/
 env.bak/
 venv.bak/
 .env.*
+!.env.example
 
 # Spyder project settings
 .spyderproject
@@ -220,3 +221,6 @@ __marimo__/
 data/
 sim/
 drafts/
+config/configuration/**/*/running.yaml
+config/configuration/**/*/default.yaml
+config/configuration/**/*/testing.yaml
