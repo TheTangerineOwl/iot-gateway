@@ -82,6 +82,16 @@ ON CONFLICT(device_id) DO UPDATE SET
     last_response = EXCLUDED.last_response;
 """
 
+DELETE_DEVICE_SQL = """
+DELETE FROM devices WHERE device_id = %s;
+"""
+
+SELECT_ALL_DEVICES = """
+SELECT device_id, name, device_type, device_status,
+ protocol, last_response, created_at
+FROM devices;
+"""
+
 
 class PostgresStorage(StorageBase):
     """Хранилище телеметрии на PostgreSQL."""
