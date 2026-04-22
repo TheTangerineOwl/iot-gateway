@@ -205,6 +205,9 @@ def mock_storage():
     storage.setup = AsyncMock()
     storage.teardown = AsyncMock()
     storage.get_by_device = AsyncMock()
+    storage.upsert_device = AsyncMock()
+    storage.delete_device = AsyncMock()
+    storage.load_devices = AsyncMock()
     return storage
 
 
