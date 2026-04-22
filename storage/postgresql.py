@@ -213,7 +213,7 @@ class PostgresStorage(StorageBase):
             raise psycopg.DatabaseError('Connection not established')
         async with self._conn.cursor() as cur:
             await cur.execute(
-                "DELETE FROM devices WHERE device_id = %s;",
+                DELETE_DEVICE_SQL,
                 (device_id,)
             )
         await self._conn.commit()
@@ -223,6 +223,6 @@ class PostgresStorage(StorageBase):
         if self._conn is None:
             raise psycopg.DatabaseError('Connection not established')
         async with self._conn.cursor() as cur:
-            await cur.execute("SELECT * FROM devices;")
+            await cur.execute(SELECT_ALL_DEVICES)
             rows = await cur.fetchall()
         return [Device.from_dict(row) for row in rows]
