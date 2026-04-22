@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from storage.base import StorageBase
-from models.device import ProtocolType
+from models.device import ProtocolType, Device
 from models.telemetry import TelemetryRecord
 
 
@@ -33,10 +33,25 @@ CREATE INDEX IF NOT EXISTS idx_timestamp
     ON telemetry (timestamp);
 """
 
+
+CREATE_DEVICES_TABLE = """
+CREATE TABLE IF NOT EXISTS devices (
+    device_id      TEXT PRIMARY KEY,
+    name           TEXT    NOT NULL DEFAULT '',
+    device_type    TEXT    NOT NULL DEFAULT 'unknown',
+    device_status  TEXT    NOT NULL DEFAULT 'offline',
+    protocol       TEXT    NOT NULL DEFAULT 'Unknown',
+    last_response  REAL    NOT NULL DEFAULT 0.0,
+    created_at     REAL    NOT NULL DEFAULT 0.0
+);
+"""
+
+
 STATEMENTS = [
     CREATE_TABLE,
     CREATE_IDX_DEVICE,
     CREATE_IDX_TS,
+    CREATE_DEVICES_TABLE,
 ]
 
 INSERT_SQL = """
@@ -51,6 +66,29 @@ SELECT_BY_DEVICE = """
     WHERE device_id = ?
     ORDER BY timestamp DESC
     LIMIT ?;
+"""
+
+UPSERT_DEVICE_SQL = """
+INSERT INTO devices
+    (device_id, name, device_type, device_status,
+     protocol, last_response, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(device_id) DO UPDATE SET
+    name          = excluded.name,
+    device_type   = excluded.device_type,
+    device_status = excluded.device_status,
+    protocol      = excluded.protocol,
+    last_response = excluded.last_response;
+"""
+
+DELETE_DEVICE_SQL = """
+DELETE FROM devices WHERE device_id = ?;
+"""
+
+SELECT_ALL_DEVICES = """
+SELECT device_id, name, device_type, device_status,
+ protocol, last_response, created_at
+FROM devices;
 """
 
 
@@ -121,3 +159,38 @@ class SQLiteStorage(StorageBase):
             )
             for row in rows
         ]
+
+    async def upsert_device(self, device: Device) -> None:
+        """Обновить или создать девайс в БД."""
+        if self._conn is None:
+            raise aiosqlite.DatabaseError('Connection not established')
+        await self._conn.execute(
+            UPSERT_DEVICE_SQL,
+            (
+                device.device_id,
+                device.name,
+                device.device_type.value,
+                device.device_status.value,
+                device.protocol.value,
+                device.last_response,
+                device.created_at
+            ),
+        )
+        await self._conn.commit()
+        logger.debug('Upserted device: %s', device.device_id)
+
+    async def delete_device(self, device_id: str) -> None:
+        """Удалить девайс из БД."""
+        if self._conn is None:
+            raise aiosqlite.DatabaseError('Connection not established')
+        await self._conn.execute(DELETE_DEVICE_SQL, (device_id,))
+        await self._conn.commit()
+        logger.debug("Deleted device: %s", device_id)
+
+    async def load_devices(self) -> list[Device]:
+        """Загрузить все девайсы из БД."""
+        if self._conn is None:
+            raise aiosqlite.DatabaseError('Connection not established')
+        async with self._conn.execute(SELECT_ALL_DEVICES) as cursor:
+            rows = await cursor.fetchall()
+        return [Device.from_dict(dict(row)) for row in rows]

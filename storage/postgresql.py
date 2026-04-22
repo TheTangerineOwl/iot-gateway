@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Any
 from storage.base import StorageBase
-from models.device import ProtocolType
+from models.device import ProtocolType, Device
 from models.telemetry import TelemetryRecord
 
 
@@ -36,10 +36,23 @@ CREATE INDEX IF NOT EXISTS idx_timestamp
     ON telemetry (timestamp);
 """
 
+CREATE_DEVICES_TABLE = """
+CREATE TABLE IF NOT EXISTS devices (
+    device_id      TEXT PRIMARY KEY,
+    name           TEXT             NOT NULL DEFAULT '',
+    device_type    TEXT             NOT NULL DEFAULT 'unknown',
+    device_status  TEXT             NOT NULL DEFAULT 'offline',
+    protocol       TEXT             NOT NULL DEFAULT 'Unknown',
+    last_response  DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    created_at     DOUBLE PRECISION NOT NULL DEFAULT 0.0
+);
+"""
+
 STATEMENTS = [
     CREATE_TABLE,
     CREATE_IDX_DEVICE,
     CREATE_IDX_TS,
+    CREATE_DEVICES_TABLE
 ]
 
 INSERT_SQL = """
@@ -54,6 +67,19 @@ SELECT_BY_DEVICE = """
     WHERE device_id = %s
     ORDER BY timestamp DESC
     LIMIT %s;
+"""
+
+UPSERT_DEVICE_SQL = """
+INSERT INTO devices
+    (device_id, name, device_type, device_status,
+     protocol, last_response, created_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT(device_id) DO UPDATE SET
+    name          = EXCLUDED.name,
+    device_type   = EXCLUDED.device_type,
+    device_status = EXCLUDED.device_status,
+    protocol      = EXCLUDED.protocol,
+    last_response = EXCLUDED.last_response;
 """
 
 
@@ -151,3 +177,42 @@ class PostgresStorage(StorageBase):
             )
             for row in rows
         ]
+
+    async def upsert_device(self, device: Device) -> None:
+        """Обновить или создать устройство в БД."""
+        if self._conn is None:
+            raise psycopg.DatabaseError('Connection not established')
+        async with self._conn.cursor() as cur:
+            await cur.execute(
+                UPSERT_DEVICE_SQL,
+                (
+                    device.device_id,
+                    device.name,
+                    device.device_type.value,
+                    device.device_status.value,
+                    device.protocol.value,
+                    device.last_response,
+                    device.created_at,
+                ),
+            )
+        await self._conn.commit()
+
+    async def delete_device(self, device_id: str) -> None:
+        """Удалить устройство из БД."""
+        if self._conn is None:
+            raise psycopg.DatabaseError('Connection not established')
+        async with self._conn.cursor() as cur:
+            await cur.execute(
+                "DELETE FROM devices WHERE device_id = %s;",
+                (device_id,)
+            )
+        await self._conn.commit()
+
+    async def load_devices(self) -> list[Device]:
+        """Загрузить устройства из БД."""
+        if self._conn is None:
+            raise psycopg.DatabaseError('Connection not established')
+        async with self._conn.cursor() as cur:
+            await cur.execute("SELECT * FROM devices;")
+            rows = await cur.fetchall()
+        return [Device.from_dict(row) for row in rows]
