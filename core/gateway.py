@@ -55,6 +55,15 @@ class Gateway:
         self._pipeline = self._build_pipeline()
         self._storage = self._link_storage()
         self._storage_subscriber = StorageSubscriber(self._storage)
+        self._registry.on_register(
+            self._storage_subscriber.on_device_register
+        )
+        self._registry.on_status_change(
+            self._storage_subscriber.on_device_status_update
+        )
+        self._registry.on_unregister(
+            self._storage_subscriber.on_device_unregister
+        )
 
         self._reg_adapters()
 
@@ -222,6 +231,17 @@ class Gateway:
         self._adapters[ad_type] = adapter
         logger.debug("Protocol adapter registered: %s", ad_name)
 
+    async def _restore_devices(self) -> None:
+        """Восстановить устройства из БД при старте."""
+        try:
+            devices = await self._storage.load_devices()
+            for device in devices:
+                device.device_status = DeviceStatus.OFFLINE
+                self._registry._devices[device.device_id] = device
+            logger.info("Restored %d device(s) from storage", len(devices))
+        except Exception as exc:
+            logger.exception("Failed to restore devices from storage: %s", exc)
+
     async def _start(self) -> None:
         """Запуск шлюза."""
         logger.info('Starting gateway')
@@ -231,6 +251,9 @@ class Gateway:
             logger.exception(
                 "Failed to connect to storage: %s", exc
             )
+
+        await self._restore_devices()
+
         await self._bus.start()
 
         self._bus.subscribe(

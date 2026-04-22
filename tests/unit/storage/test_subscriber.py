@@ -1,9 +1,16 @@
 """Тест подписчика хранилища."""
 import pytest
 from unittest.mock import AsyncMock
+from models.device import Device, DeviceStatus, DeviceType, ProtocolType
 from models.message import Message, MessageType
 from models.telemetry import TelemetryRecord
 from storage.subscriber import StorageSubscriber
+
+
+@pytest.fixture
+def subscriber(mock_storage):
+    """Подписчик с мок-хранилищем."""
+    return StorageSubscriber(mock_storage)
 
 
 class TestStorageSubscriber:
@@ -104,3 +111,156 @@ class TestStorageSubscriber:
             await subscriber.handle(telemetry_message)
 
             mock_storage.save.assert_awaited_once()
+
+    class TestOnDeviceRegister:
+        """Тесты колбэка on_device_register."""
+
+        @pytest.mark.asyncio
+        async def test_calls_upsert_device(
+            self,
+            subscriber,
+            mock_storage,
+            device
+        ):
+            """on_device_register вызывает storage.upsert_device."""
+            await subscriber.on_device_register(device)
+
+            mock_storage.upsert_device.assert_awaited_once_with(device)
+
+        @pytest.mark.asyncio
+        async def test_does_not_raise_on_storage_error(
+            self, subscriber, mock_storage, device
+        ):
+            """on_device_register не пробрасывает исключение при ошибке."""
+            mock_storage.upsert_device.side_effect = RuntimeError(
+                "DB unavailable"
+            )
+
+            # не должно бросить исключение наружу
+            await subscriber.on_device_register(device)
+
+        @pytest.mark.asyncio
+        async def test_delete_not_called_on_register(
+            self, subscriber, mock_storage, device
+        ):
+            """on_device_register не трогает delete_device."""
+            await subscriber.on_device_register(device)
+
+            mock_storage.delete_device.assert_not_awaited()
+
+    class TestOnDeviceStatusUpdate:
+        """Тесты колбэка on_device_status_update."""
+
+        @pytest.mark.asyncio
+        async def test_calls_upsert_device(
+            self,
+            subscriber,
+            mock_storage,
+            device
+        ):
+            """on_device_status_update вызывает upsert_device."""
+            old_status = DeviceStatus.OFFLINE
+            new_status = DeviceStatus.ONLINE
+
+            await subscriber.on_device_status_update(
+                device,
+                old_status,
+                new_status
+            )
+
+            mock_storage.upsert_device.assert_awaited_once_with(device)
+
+        @pytest.mark.asyncio
+        async def test_calls_upsert_even_same_status(
+            self, subscriber, mock_storage, device
+        ):
+            """
+            Колбек всё равно вызывает upsert при совпадении статусов.
+
+            Логика в subscriber.py не прерывает выполнение
+            при одинаковом статусе — лишь логирует и продолжает.
+            Upsert всё равно вызван.
+            """
+            status = DeviceStatus.ONLINE
+
+            await subscriber.on_device_status_update(device, status, status)
+
+            mock_storage.upsert_device.assert_awaited_once_with(device)
+
+        @pytest.mark.asyncio
+        async def test_does_not_raise_on_storage_error(
+            self, subscriber, mock_storage, device
+        ):
+            """on_device_status_update не пробрасывает исключение."""
+            mock_storage.upsert_device.side_effect = Exception(
+                "connection lost"
+            )
+
+            await subscriber.on_device_status_update(
+                device, DeviceStatus.OFFLINE, DeviceStatus.ONLINE
+            )
+
+        @pytest.mark.asyncio
+        async def test_delete_not_called_on_status_update(
+            self, subscriber, mock_storage, device
+        ):
+            """on_device_status_update не трогает delete_device."""
+            await subscriber.on_device_status_update(
+                device, DeviceStatus.OFFLINE, DeviceStatus.ONLINE
+            )
+
+            mock_storage.delete_device.assert_not_awaited()
+
+    class TestOnDeviceUnregister:
+        """Тесты колбэка on_device_unregister."""
+
+        @pytest.mark.asyncio
+        async def test_calls_delete_device(
+            self,
+            subscriber,
+            mock_storage,
+            device
+        ):
+            """on_device_unregister вызывает storage.delete_device."""
+            await subscriber.on_device_unregister(device)
+
+            mock_storage.delete_device.assert_awaited_once_with(
+                device.device_id
+            )
+
+        @pytest.mark.asyncio
+        async def test_does_not_raise_on_storage_error(
+            self, subscriber, mock_storage, device
+        ):
+            """on_device_unregister не пробрасывает исключение при ошибке."""
+            mock_storage.delete_device.side_effect = RuntimeError("DB gone")
+
+            await subscriber.on_device_unregister(device)
+
+        @pytest.mark.asyncio
+        async def test_upsert_not_called_on_unregister(
+            self, subscriber, mock_storage, device
+        ):
+            """on_device_unregister не трогает upsert_device."""
+            await subscriber.on_device_unregister(device)
+
+            mock_storage.upsert_device.assert_not_awaited()
+
+        @pytest.mark.asyncio
+        async def test_delete_called_with_correct_id(
+            self,
+            subscriber,
+            mock_storage
+        ):
+            """on_device_unregister передаёт именно device_id устройства."""
+            specific_device = Device(
+                device_id="exact-id-999",
+                name="Exact",
+                device_type=DeviceType.ACTUATOR,
+                device_status=DeviceStatus.OFFLINE,
+                protocol=ProtocolType.MQTT,
+            )
+
+            await subscriber.on_device_unregister(specific_device)
+
+            mock_storage.delete_device.assert_awaited_once_with("exact-id-999")
