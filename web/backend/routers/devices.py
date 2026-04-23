@@ -12,7 +12,9 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
+from web.backend.models.user import User
 from web.backend.dependencies.auth import get_current_user
+
 
 router = APIRouter(tags=["devices"])
 
@@ -27,7 +29,7 @@ router = APIRouter(tags=["devices"])
     },
 )
 async def list_devices(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> JSONResponse:
     """Возвращает список всех зарегистрированных устройств (read-only)."""
     return JSONResponse(
@@ -51,7 +53,7 @@ async def list_devices(
 )
 async def get_device(
     device_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> JSONResponse:
     """Возвращает детали устройства и последние N записей телеметрии."""
     return JSONResponse(
@@ -76,7 +78,7 @@ async def get_device(
 )
 async def send_command(
     device_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Отправка команды на шлюз.

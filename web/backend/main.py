@@ -1,35 +1,74 @@
 """
 IoT Gateway Web UI — FastAPI приложение.
 
-Точка входа: uvicorn web.backend.main:app --host 0.0.0.0 --port 8090
+Точка входа:
+    uvicorn web.backend.main:app --host 0.0.0.0 --port 8090
 
 Маршруты:
-  /web/api/auth/*     — авторизация (JWT)
-  /web/api/gateway/*  — статус и конфигурация шлюза
-  /web/api/devices/*  — управление устройствами
-  /web/api/logs/*     — просмотр и стриминг логов
-  /docs               — Swagger UI
-  /redoc              — ReDoc
-  /*                  — SPA (frontend static files, после сборки)
+    /web/api/auth/*     — авторизация (JWT)
+    /web/api/gateway/*  — статус и конфигурация шлюза
+    /web/api/devices/*  — управление устройствами
+    /web/api/logs/*     — просмотр и стриминг логов
+    /docs               — Swagger UI
+    /redoc              — ReDoc
+    /*                  — SPA (frontend static files, после сборки)
 """
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from web.backend.dependencies.database import close_db, init_db
+from web.backend.dependencies.config import get_settings
 from web.backend.routers import auth, devices, gateway, logs
 
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s │ %(levelname)-8s │ %(name)-30s │ %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager для FastAPI.
+
+    Выполняет инициализацию БД при старте и закрытие при завершении.
+    """
+    settings = get_settings()
+    logger.info("Инициализация БД...")
+    await init_db(settings)
+    logger.info("БД инициализирована")
+
+    logger.info("IoT Gateway Web UI запущен")
+    if _static_dir.exists():
+        logger.info("Статика фронтенда найдена: %s", _static_dir)
+    else:
+        logger.warning(
+            "Директория статики не найдена: %s. "
+            "Запустите сборку фронтенда (`npm run build` в web/frontend/).",
+            _static_dir,
+        )
+    _assets_dir = _static_dir / "assets"
+    if _assets_dir.exists():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=str(_assets_dir)),
+            name="assets"
+        )
+
+    yield
+
+    logger.info("Закрытие БД...")
+    await close_db()
+    logger.info("БД закрыта")
 
 
 app = FastAPI(
@@ -44,8 +83,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
-
 
 _cors_origins_env = os.getenv("WEB__CORS_ORIGINS", "*")
 _cors_origins = (
@@ -62,37 +101,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 app.include_router(auth.router, prefix="/web/api/auth")
 app.include_router(gateway.router, prefix="/web/api/gateway")
 app.include_router(devices.router, prefix="/web/api/devices")
 app.include_router(logs.router, prefix="/web/api/logs")
 
-
 _static_dir = Path(__file__).parent / "static"
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Событие при запуске."""
-    logger.info("IoT Gateway Web UI запущен")
-    if _static_dir.exists():
-        logger.info("Статика фронтенда найдена: %s", _static_dir)
-    else:
-        logger.warning(
-            "Директория статики не найдена: %s. "
-            "Запустите сборку фронтенда (`npm run build` в web/frontend/).",
-            _static_dir,
-        )
-
-
-_assets_dir = _static_dir / "assets"
-if _assets_dir.exists():
-    app.mount(
-        "/assets",
-        StaticFiles(directory=str(_assets_dir)),
-        name="assets"
-    )
 
 
 @app.get(
@@ -104,7 +118,6 @@ if _assets_dir.exists():
 async def spa_fallback(full_path: str) -> FileResponse | JSONResponse:
     """
     Фолбек для маршрутизации.
-
     Перехватывает все пути, не совпавшие с API или статикой,
     и возвращает index.html — необходимо для React Router.
     """
@@ -112,12 +125,11 @@ async def spa_fallback(full_path: str) -> FileResponse | JSONResponse:
     if index_html.exists():
         return FileResponse(str(index_html))
 
-    # Фронтенд ещё не собран — возвращаем понятное сообщение
     return JSONResponse(
         status_code=503,
         content={
             "detail": "Frontend ещё не собран. "
-                      "Запустите `npm run build` в web/frontend/.",
+            "Запустите `npm run build` в web/frontend/.",
             "docs": "/docs",
         },
     )

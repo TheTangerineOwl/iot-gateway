@@ -1,7 +1,11 @@
 """Чтение конфигурации для веб-приложения."""
+import logging
 from functools import lru_cache
-
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -24,7 +28,6 @@ class Settings(BaseSettings):
     gateway_ws_url: str = "http://localhost:8082"
     logs_dir: str = "logs/"
 
-    # Настройки хранилища (read-only, для devices сервиса)
     sqlite_dbpath: str = "data/telemetry.db"
 
     model_config = SettingsConfigDict(
@@ -37,10 +40,36 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """
-    Кешированный синглтон настроек.
-
-    Используется как FastAPI Depends:
-        settings: Settings = Depends(get_settings)
-    """
+    """Кешированный синглтон настроек."""
     return Settings()
+
+
+def get_database_url(settings: Settings) -> str:
+    """
+    Определяет URL БД из переменных окружения.
+
+    Использует STORAGE__POSTGRESQL__* или STORAGE__SQLITE__DBPATH
+    в зависимости от наличия переменных PostgreSQL.
+    """
+    # Проверяем наличие переменных PostgreSQL
+    pg_host = os.getenv("STORAGE__POSTGRESQL__ADDRESS__HOST")
+    pg_port = os.getenv("STORAGE__POSTGRESQL__ADDRESS__PORT", "5432")
+    pg_user = os.getenv("STORAGE__POSTGRESQL__USER__USERNAME")
+    pg_password = os.getenv("STORAGE__POSTGRESQL__USER__PASSWORD")
+    pg_dbname = os.getenv("STORAGE__POSTGRESQL__DBNAME")
+
+    if all([pg_host, pg_user, pg_password, pg_dbname]):
+        # PostgreSQL async URL
+        url = (
+            f"postgresql+asyncpg://{pg_user}:{pg_password}"
+            f"@{pg_host}:{pg_port}/{pg_dbname}"
+        )
+        logger.info("Используем PostgreSQL: %s@%s/%s",
+                    pg_user, pg_host, pg_dbname)
+        return url
+    else:
+        # SQLite async URL
+        sqlite_path = settings.sqlite_dbpath
+        url = f"sqlite+aiosqlite:///{sqlite_path}"
+        logger.info("Используем SQLite: %s", sqlite_path)
+        return url

@@ -8,7 +8,9 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
+from web.backend.models.user import User
 from web.backend.dependencies.auth import get_current_user
+
 
 router = APIRouter(tags=["gateway"])
 
@@ -23,7 +25,7 @@ router = APIRouter(tags=["gateway"])
     },
 )
 async def get_gateway_status(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Получение статуса шлюза.
@@ -50,7 +52,7 @@ async def get_gateway_status(
     },
 )
 async def get_gateway_config(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Получение конфигурации шлюза.

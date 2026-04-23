@@ -6,13 +6,12 @@
   GET /web/api/logs/{filename}    — содержимое файла (с фильтрацией)
   GET /web/api/logs/stream        — SSE live-стрим активного лога
 """
-
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
+from web.backend.models.user import User
 from web.backend.dependencies.auth import get_current_user
+
 
 router = APIRouter(tags=["logs"])
 
@@ -27,7 +26,7 @@ router = APIRouter(tags=["logs"])
     },
 )
 async def list_log_files(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Получение списка логов.
@@ -54,7 +53,7 @@ async def list_log_files(
     },
 )
 async def stream_logs(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     level: str = "INFO",
 ) -> JSONResponse:
     """
@@ -85,7 +84,7 @@ async def stream_logs(
 )
 async def get_log_file(
     filename: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     lines: int = 100,
     level: str | None = None,
     search: str | None = None,

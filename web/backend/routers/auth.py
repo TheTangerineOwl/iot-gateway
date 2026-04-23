@@ -4,19 +4,24 @@
 Эндпоинты:
   POST /web/api/auth/login   — получить JWT-токен
   POST /web/api/auth/logout  — инвалидировать сессию (stateless stub)
+  GET  /web/api/auth/me      — получить информацию о текущем пользователе
 """
 import logging
 from datetime import timedelta
-
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from web.backend.dependencies.database import get_session
 from web.backend.dependencies.auth import get_current_user
 from web.backend.dependencies.config import Settings, get_settings
-from web.backend.models.auth import LoginRequest, TokenResponse
-from web.backend.services.auth import authenticate_user, create_access_token
+from web.backend.schemas.auth import TokenResponse
+from web.backend.models.user import User
+from web.backend.services.auth import create_access_token
+from web.backend.services.user_service import authenticate_user_db
+
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["auth"])
 
 
@@ -30,25 +35,27 @@ router = APIRouter(tags=["auth"])
     },
 )
 async def login(
-    request: LoginRequest,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> TokenResponse:
     """
-    Проверяет username/password против WEB__ADMIN_USER / WEB__ADMIN_PASSWORD.
+    Проверяет username/password через БД.
 
     Возвращает Bearer JWT при успехе, 401 при ошибке.
     """
-    valid = authenticate_user(
-        username=request.username,
-        password=request.password,
-        expected_username=settings.admin_user,
-        expected_password=settings.admin_password,
+    username = form_data.username
+    password = form_data.password
+    user = await authenticate_user_db(
+        db=db,
+        username=username,
+        password=password,
     )
 
-    if not valid:
+    if user is None:
         logger.warning(
             "Неудачная попытка входа для пользователя: %s",
-            request.username
+            username
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -58,12 +65,12 @@ async def login(
 
     expire_delta = timedelta(minutes=settings.token_expire_minutes)
     token = create_access_token(
-        data={"sub": request.username},
+        data={"sub": username, "user_id": user.id},
         secret_key=settings.secret_key,
         expires_delta=expire_delta,
     )
 
-    logger.info("Пользователь '%s' успешно авторизован", request.username)
+    logger.info("Пользователь '%s' успешно авторизован", username)
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -80,8 +87,30 @@ async def login(
     },
 )
 async def logout(
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     """Stateless logout: клиент должен удалить токен из хранилища."""
-    logger.info("Пользователь '%s' вышел из системы", current_user.get("sub"))
+    logger.info("Пользователь '%s' вышел из системы", current_user.username)
     return {"message": "logged out"}
+
+
+@router.get(
+    "/me",
+    summary="Получить информацию о текущем пользователе",
+    responses={
+        200: {"description": "Информация о пользователе"},
+        401: {"description": "Не авторизован"},
+    },
+)
+async def get_me(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Возвращает информацию о текущем авторизованном пользователе.
+
+    Извлекает данные из JWT токена.
+    """
+    return {
+        "username": current_user.username,
+        "user_id": current_user.id,
+    }

@@ -2,29 +2,29 @@
 Сервис авторизации: JWT-токены и проверка паролей.
 
 Поддерживает два формата WEB__ADMIN_PASSWORD:
-  - bcrypt-хэш (начинается с $2b$) → сравниваем через passlib
-  - plain-text → прямое сравнение строк (только для dev/demo)
+  - bcrypt-хэш (начинается с $2b$) - сравниваем через passlib
+  - plain-text - прямое сравнение строк (только для dev/demo)
 """
-
-from __future__ import annotations
-
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
+
 
 logger = logging.getLogger(__name__)
 
 ALGORITHM = "HS256"
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def get_password_hash(plain_password: str) -> str:
     """Возвращает bcrypt-хэш пароля."""
-    return _pwd_context.hash(plain_password)
+    if not plain_password:
+        raise ValueError('Need password')
+    byte_pass = plain_password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(byte_pass, salt)
+    return hashed.decode('utf-8')
 
 
 def _is_bcrypt_hash(value: str) -> bool:
@@ -40,7 +40,9 @@ def verify_password(plain_password: str, stored_password: str) -> bool:
     """
     if _is_bcrypt_hash(stored_password):
         try:
-            return _pwd_context.verify(plain_password, stored_password)
+            byte_pass = plain_password.encode('utf-8')[:72]
+            stored_bytes = stored_password.encode('utf-8')
+            return bcrypt.checkpw(byte_pass, stored_bytes)
         except Exception:
             logger.warning("Ошибка при верификации bcrypt-хэша")
             return False
@@ -59,7 +61,11 @@ def authenticate_user(
 
     Возвращает True только если username и password совпадают.
     """
+    if not username or not password:
+        logger.info("Попытка аутентификации с пустыми учётными данными")
+        return False
     if username != expected_username:
+        logger.info("Неверное имя пользователя: %s", username)
         return False
     return verify_password(password, expected_password)
 
