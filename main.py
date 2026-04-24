@@ -1,16 +1,11 @@
 """Точка входа в приложение шлюза."""
 import asyncio
 import logging
-from pathlib import Path
 from sys import exit, platform
 from typenv import Env
+from config import CONFIG_PATH, ENV_PATH
 from config.config import load_configuration, load_env
 from core.gateway import Gateway
-
-
-BASE_DIR = Path(__file__).resolve().parent
-ENV_PATH = BASE_DIR / '.env'
-CONFIG_PATH = BASE_DIR / 'config' / 'configuration'
 
 
 async def main():

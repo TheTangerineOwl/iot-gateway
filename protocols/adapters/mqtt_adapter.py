@@ -461,13 +461,9 @@ class MQTTAdapter(ProtocolAdapter):
 
     async def health_check(self) -> Dict[str, Any]:
         """Вернуть статус адаптера."""
-        return {
-            "adapter": self.protocol_name,
+        base_health = await super()._health_check()
+        base_health.update({
             "connected": self.is_connected,
             "broker": f"{self.broker_host}:{self.broker_port}",
-            "client_id": self.client_id,
-            "protocol_version": f"MQTT {self.protocol_version}",
-            "qos": self.qos,
-            "tls_enabled": self.use_tls,
-            "keepalive": self.keepalive,
-        }
+        })
+        return base_health

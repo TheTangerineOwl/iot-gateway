@@ -2,6 +2,7 @@
 from datetime import datetime
 import logging
 from pathlib import Path
+import re
 from shutil import copyfile, SameFileError
 from typenv import Env
 from typing import Any, Dict, Optional
@@ -499,3 +500,67 @@ def get_conf(
     if value is None:
         return default
     return value
+
+
+def _parse_whitelist_file(filename: Path):
+    """Считать ключи из белого списка для публичного конфига."""
+    whitelist = []
+    error = False
+    try:
+        lines = []
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+        pattern = r'^[a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z][a-zA-Z0-9_-]*)+$'
+        for line in lines:
+            line = line.split('#', 1)[0].strip()
+            match = re.match(pattern, line)
+            if match is None:
+                continue
+            start, end = match.span()
+            whitelist.append(line[start:end])
+    except Exception as exc:
+        logger.warning(
+            f'Could not build whitelist config from {filename}: {exc}, '
+            'building from default'
+        )
+        error = True
+    if error:
+        whitelist = [
+            'gateway.general.id',
+            'gateway.general.name',
+            'gateway.general.storage_type'
+            'gateway.logger.dir',
+        ]
+    whitelist.sort()
+    return whitelist
+
+
+def _insert_nested(
+    target: dict,
+    keys: list[str],
+    value: Any
+) -> None:
+    """Вставить значение в соответствии с ключом."""
+    for key in keys[:-1]:
+        if key not in target:
+            target[key] = {}
+        target = target[key]
+
+    target[keys[-1]] = value
+
+
+def whitelist_to_dict(
+    config: YAMLConfigLoader,
+    whitelist_file: str | Path
+) -> dict[str, Any]:
+    """Получить публичный конфиг шлюза из белого списка."""
+    filepath = Path(whitelist_file)
+    whitelist = _parse_whitelist_file(filepath)
+    result: dict[str, Any] = {}
+    for key in whitelist:
+        val = get_conf(config, key)
+        if val is None:
+            continue
+        parts = key.split('.')
+        _insert_nested(result, parts, val)
+    return result

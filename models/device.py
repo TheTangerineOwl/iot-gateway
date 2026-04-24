@@ -55,6 +55,7 @@ class ProtocolType(str, Enum):
     WEBSOCKET = 'WebSocket'
     COAP = 'CoAP'
     MODBUS = 'Modbus'
+    HTTP_GATEWAY = 'HTTP Gateway Management'
     UNKNOWN = 'Unknown'
 
     @classmethod

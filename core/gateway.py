@@ -1,9 +1,12 @@
 """Основной модуль шлюза."""
 import asyncio
+from datetime import datetime, timezone
 import logging
 import signal
 from typing import Any
-from config.config import get_conf, YAMLConfigLoader
+
+from config import CONFIG_PATH
+from config.config import get_conf, YAMLConfigLoader, whitelist_to_dict
 from config.topics import TopicKey
 from core.registry import DeviceRegistry
 from core.message_bus import MessageBus
@@ -22,6 +25,7 @@ from protocols.adapters.coap_adapter import CoAPAdapter
 from protocols.adapters.http_adapter import HTTPAdapter
 from protocols.adapters.websocket_adapter import WebSocketAdapter
 from protocols.adapters.mqtt_adapter import MQTTAdapter
+from protocols.adapters.management_adapter import ManagementAdapter
 
 # env = Env(upper=True)
 logger = logging.getLogger(__name__)
@@ -66,6 +70,8 @@ class Gateway:
         )
 
         self._reg_adapters()
+
+        self._starting_time: datetime = datetime.now(tz=timezone.utc)
 
     @property
     def is_running(self) -> bool:
@@ -139,6 +145,10 @@ class Gateway:
             'WebSocket': WebSocketAdapter,
             'MQTT': MQTTAdapter
         }
+        if get_conf(self._config, 'adapters.management.enabled', False):
+            self.register_adapter(ManagementAdapter(self._config, self))
+        else:
+            logger.info('Adapter for gateway health disabled!')
         for name, builder in adapter_types.items():
             if get_conf(
                 self._config,
@@ -245,6 +255,7 @@ class Gateway:
     async def _start(self) -> None:
         """Запуск шлюза."""
         logger.info('Starting gateway')
+        self._starting_time = datetime.now(tz=timezone.utc)
         try:
             await self._storage.setup()
         except Exception as exc:
@@ -389,21 +400,23 @@ class Gateway:
             await self._stop()
 
     @property
-    def status(self) -> dict[str, Any]:
+    async def status(self) -> dict[str, Any]:
         """Статус работы шлюза."""
         return {
-            "gateway": {
-                "id": get_conf(
+            # "checked_at": datetime.now(tz=timezone.utc).isoformat(),
+            "general": {
+                "id": str(get_conf(
                     self._config,
                     'gateway.general.id',
                     1
-                ),
+                )),
                 "name": get_conf(
                     self._config,
                     'gateway.general.name',
-                    1
+                    'IoT Gateway'
                 ),
                 "running": self._running,
+                "start_time": self._starting_time.isoformat()
             },
             "devices": {
                 "total": self._registry.count,
@@ -412,7 +425,18 @@ class Gateway:
             "message_bus": self._bus.stats,
             "pipeline": self._pipeline.stats,
             "adapters": {
-                name: {"running": adapter.is_running}
+                name: await adapter._health_check()
                 for name, adapter in self._adapters.items()
             },
         }
+
+    def _build_public_config(self) -> dict[str, Any]:
+        """Построение публичного вывода конфигурации."""
+        whitelist = CONFIG_PATH / 'public_config_whitelist.txt'
+        conf = whitelist_to_dict(self._config, whitelist)
+        return conf
+
+    @property
+    def configuration(self) -> dict[str, Any]:
+        """Конфигурация шлюза."""
+        return self._build_public_config()

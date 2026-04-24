@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     Пример: WEB__SECRET_KEY=changeme → settings.secret_key == "changeme"
     """
 
+    gateway_id: str = '1'
+    gateway_name: str = 'IoT Gateway'
     host: str = "0.0.0.0"
     port: int = 8090
 
@@ -24,11 +26,13 @@ class Settings(BaseSettings):
     admin_password: str = "changeme"
     token_expire_minutes: int = 60
 
-    gateway_http_url: str = "http://localhost:8081"
-    gateway_ws_url: str = "http://localhost:8082"
     logs_dir: str = "logs/"
 
     sqlite_dbpath: str = "data/telemetry.db"
+
+    gateway_management_url: str = 'http://localhost:8001'
+
+    check_timeout: float = 5.0
 
     model_config = SettingsConfigDict(
         env_prefix="WEB__",
