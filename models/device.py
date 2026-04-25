@@ -78,6 +78,7 @@ class Device:
     protocol: ProtocolType = ProtocolType.UNKNOWN
     last_response: float = 0.0
     created_at: float = field(default_factory=time)
+    metadata: dict = field(default_factory=dict)
 
     def touch(self):
         """Обновляет время последнего обращения."""
@@ -99,6 +100,7 @@ class Device:
             "device_status": self.device_status.value,
             "last_response": self.last_response,
             "created_at": self.created_at,
+            "metadata": self.metadata
         }
 
     @classmethod
@@ -126,4 +128,5 @@ class Device:
             created_at=float(
                 data.get("created_at", time())
             ),
+            metadata=data.get('metadata', dict())
         )

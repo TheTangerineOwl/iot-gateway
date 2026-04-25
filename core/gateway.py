@@ -14,6 +14,7 @@ from core.pipeline.pipeline import Pipeline
 from core.pipeline.stages import (
     ValidationStage, AuthorizationStage, CleanupStage
 )
+from core.command_tracker import CommandTracker
 from models.device import DeviceStatus, Device, ProtocolType
 from models.message import Message, MessageType
 from storage.base import StorageBase
@@ -72,6 +73,7 @@ class Gateway:
         self._reg_adapters()
 
         self._starting_time: datetime = datetime.now(tz=timezone.utc)
+        self._command_tracker: CommandTracker = CommandTracker()
 
     @property
     def is_running(self) -> bool:
@@ -210,6 +212,10 @@ class Gateway:
         if message.message_type == MessageType.REGISTRATION:
             device = Device.from_dict(message.payload)
             device.device_status = DeviceStatus.ONLINE
+            if message.metadata and 'callback_url' in message.metadata:
+                device.metadata[
+                    'callback_url'
+                ] = message.metadata['callback_url']
             await self._registry.register(device)
         else:
             raise ValueError(
@@ -226,6 +232,59 @@ class Gateway:
                 f'Incorrect message type {message.message_type}'
                 f' for heartbeat topic {message.message_topic}'
             )
+
+    async def _handle_command_response(self, message: Message) -> None:
+        """Обработка ответа на команду."""
+        logger.info(f'Handle command response from {message.device_id}, '
+                    f'protocol {message.protocol}: {message.payload}')
+        self._command_tracker.resolve(message)
+        return
+
+    async def _handle_command(self, message: Message) -> None:
+        """Перенаправить команду с шины на нужный адаптер."""
+        device_id = message.device_id
+        if not device_id:
+            logger.warning(
+                "_handle_command: message has no device_id,"
+                "skipping"
+            )
+            return
+
+        device = self._registry.get(device_id)
+        if device is None:
+            logger.warning(
+                "_handle_command: device '%s' not found in registry", device_id
+            )
+            return
+
+        adapter = self._adapters.get(device.protocol)
+        if adapter is None:
+            logger.warning(
+                "_handle_command: no adapter for protocol '%s' (device '%s')",
+                device.protocol.value, device_id,
+            )
+            return
+
+        command = message.payload.get("command", "")
+        params = message.payload.get("params", {})
+
+        success = await adapter.send_command(device_id, command, params)
+        if (
+            success
+            and message.message_id in self._command_tracker._pending
+        ):
+            synth = Message(
+                message_id=message.message_id,
+                message_type=MessageType.COMMAND_RESPONSE,
+                device_id=device_id,
+                payload={"status": "delivered"}
+            )
+            self._command_tracker.resolve(synth)
+        logger.info(
+            "_handle_command: command '%s' to device '%s' via %s — %s",
+            command, device_id, device.protocol.value,
+            "OK" if success else "FAILED",
+        )
 
     def register_adapter(self, adapter: ProtocolAdapter) -> None:
         """Зарегистрировать адаптер протокола."""
@@ -296,6 +355,20 @@ class Gateway:
                 TopicKey.PROCESSED_TELEMETRY
             ),
             self._storage_subscriber.handle
+        )
+        self._bus.subscribe(
+            self._topics.get_subscription_pattern(
+                TopicKey.DEVICES_COMMAND
+            ),
+            self._handle_command,
+            priority=10
+        )
+        self._bus.subscribe(
+            self._topics.get_subscription_pattern(
+                TopicKey.DEVICES_COMMAND_RESPONSE
+            ),
+            self._handle_command_response,
+            priority=5
         )
 
         await self._pipeline.setup()
@@ -440,3 +513,8 @@ class Gateway:
     def configuration(self) -> dict[str, Any]:
         """Конфигурация шлюза."""
         return self._build_public_config()
+
+    @property
+    def bus(self) -> MessageBus:
+        """Шина сообщений."""
+        return self._bus

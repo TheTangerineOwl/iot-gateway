@@ -15,6 +15,8 @@ from aiohttp import web
 
 from config.config import YAMLConfigLoader
 from models.device import ProtocolType
+from models.message import Message, MessageType
+from config.topics import TopicKey
 from protocols.adapters.base import ProtocolAdapter
 
 if TYPE_CHECKING:
@@ -28,6 +30,8 @@ class ManagementAdapter(ProtocolAdapter):
 
     def __init__(self, config: YAMLConfigLoader, gateway: "Gateway") -> None:
         """
+        Адаптер внутреннего HTTP-управления шлюзом.
+
         Args:
             config:  общий конфиг шлюза (YAMLConfigLoader).
             gateway: ссылка на экземпляр Gateway — для вызова
@@ -56,6 +60,7 @@ class ManagementAdapter(ProtocolAdapter):
 
     @property
     def protocol_type(self) -> ProtocolType:
+        """Тип протокола."""
         return ProtocolType.HTTP_GATEWAY
 
     async def start(self) -> None:
@@ -63,7 +68,10 @@ class ManagementAdapter(ProtocolAdapter):
         self._app = web.Application()
         self._app.router.add_get(self._url_status, self._handle_status)
         self._app.router.add_get(self._url_config, self._handle_config)
-
+        self._app.router.add_post(
+            self._url_root + "/devices/{device_id}/command",
+            self._handle_command,
+        )
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
 
@@ -100,3 +108,77 @@ class ManagementAdapter(ProtocolAdapter):
             gw_config,
             status=HTTPStatus.OK,
         )
+
+    async def _handle_command(self, request: web.Request) -> web.Response:
+        """Обработать отправку команды для устройства."""
+        device_id = request.match_info["device_id"]
+
+        try:
+            body: dict = await request.json()
+        except Exception:
+            return web.json_response(
+                {"error": "invalid JSON"}, status=HTTPStatus.BAD_REQUEST
+            )
+
+        command = body.get("command")
+        if not command:
+            return web.json_response(
+                {"error": "field 'command' is required"},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+
+        params = body.get("params", {})
+        timeout = float(body.get("timeout", 10.0))
+
+        message = Message(
+            message_type=MessageType.COMMAND,
+            device_id=device_id,
+            payload={"command": command, "params": params},
+            message_topic=self._gateway.bus.topics.get(
+                TopicKey.DEVICES_COMMAND, device_id=device_id
+            ),
+        )
+
+        response_msg = await self._gateway._command_tracker.send_and_wait(
+            message=message,
+            bus_publish_coro=self._gateway.bus.publish(
+                message.message_topic, message
+            ),
+            timeout=timeout,
+        )
+
+        if response_msg is None:
+            return web.json_response(
+                {
+                    "status": "timeout",
+                    "device_id": device_id,
+                    "command": command,
+                    "message_id": message.message_id,
+                },
+                status=HTTPStatus.GATEWAY_TIMEOUT,
+            )
+
+        return web.json_response(
+            {
+                "status": "ok",
+                "device_id": device_id,
+                "command": command,
+                "message_id": message.message_id,
+                "response": response_msg.payload,
+            },
+            status=HTTPStatus.OK,
+        )
+
+    async def send_command(self, device_id, command, params=None):
+        """
+        Заглушка для метода из ProtocolAdapter.
+
+        ManagementAdapter отвечает за связь между веб-приложением
+        и шлюзом, поэтому не связан с оконечным устройством.
+        Команду отправлять некуда.
+        """
+        logger.warning(
+            "ManagementAdapter does not support send_command "
+            "(device_id=%s, command=%s)", device_id, command
+        )
+        return False
