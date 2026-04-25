@@ -40,6 +40,18 @@ _LOGGERS_TO_SUPRESS: set[str] = {
 }
 
 
+# Раскомментировать, чтобы захватывать логи
+# до момента вызова setup_logging()
+# logging.basicConfig(
+#     filename=f'logs/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log',
+#     filemode='w',
+#     encoding='utf-8',
+#     format="%(asctime)s │ %(levelname)-7s │ %(name)-30s │ %(message)s",
+#     datefmt="%Y-%m-%d %H:%M:%S",
+#     level=logging.DEBUG
+# )
+
+
 def _supress_loggers(level: int | str):
     """Подавляет вывод логгеров."""
     for lib in _LOGGERS_TO_SUPRESS:
@@ -332,11 +344,11 @@ class YAMLConfigLoader:
 
     def get_adapter_config(self, adapter_name: str) -> dict:
         """Получить конфигурацию адаптера."""
-        return self._adapter_configs.get(adapter_name, {})
+        return self._adapter_configs.get(adapter_name.lower(), {})
 
     def get_storage_config(self, storage_type: str) -> dict:
         """Получить конфигурацию хранилища."""
-        return self._storage_configs.get(storage_type, {})
+        return self._storage_configs.get(storage_type.lower(), {})
 
     @classmethod
     def _deep_copy(cls, obj: Any) -> Any:
@@ -446,7 +458,6 @@ class YAMLConfigLoader:
             env,
             []
         )
-
         self.config = result
         self._adapter_configs = self.config.get('adapters', {})
         self._storage_configs = self.config.get('storage', {})

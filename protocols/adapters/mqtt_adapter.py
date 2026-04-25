@@ -300,12 +300,11 @@ class MQTTAdapter(ProtocolAdapter):
 
         try:
 
-            subscriptions = self._adapter_config.get(
-                'topics', {}
-            ).get('subscriptions', {})
+            subscriptions = self._adapter_config.get('subscriptions', {})
 
             for k, v in subscriptions.items():
                 topic = v.get('topic')
+                
                 qos = int(v.get('qos', 1))
                 await self.client.subscribe(topic, qos=qos)
                 logger.info(
