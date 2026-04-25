@@ -518,3 +518,8 @@ class Gateway:
     def bus(self) -> MessageBus:
         """Шина сообщений."""
         return self._bus
+
+    @property
+    def registry(self) -> DeviceRegistry:
+        """Регистр устройств."""
+        return self._registry

@@ -72,6 +72,14 @@ class ManagementAdapter(ProtocolAdapter):
             self._url_root + "/devices/{device_id}/command",
             self._handle_command,
         )
+        self._app.router.add_get(
+            self._url_root + "/devices/",
+            self._handle_list_devices,
+        )
+        self._app.router.add_get(
+            self._url_root + "/devices/{device_id}",
+            self._handle_get_device,
+        )
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
 
@@ -182,3 +190,21 @@ class ManagementAdapter(ProtocolAdapter):
             "(device_id=%s, command=%s)", device_id, command
         )
         return False
+
+    async def _handle_list_devices(self, request: web.Request) -> web.Response:
+        """GET /management/devices/ — список всех устройств из реестра."""
+        registry = self._gateway.registry
+        devices = [d.to_dict() for d in registry._devices.values()]
+        return web.json_response({"devices": devices, "total": len(devices)})
+
+    async def _handle_get_device(self, request: web.Request) -> web.Response:
+        """GET /management/devices/{device_id} — один девайс."""
+        device_id = request.match_info["device_id"]
+        registry = self._gateway.registry
+        device = registry.get(device_id)
+        if device is None:
+            return web.json_response(
+                {"error": f"device '{device_id}' not found"},
+                status=HTTPStatus.NOT_FOUND,
+            )
+        return web.json_response(device.to_dict())
