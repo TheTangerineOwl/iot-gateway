@@ -7,6 +7,7 @@
   GET /web/api/logs/stream        — SSE live-стрим активного лога
 """
 import logging
+from http import HTTPStatus
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -28,10 +29,14 @@ router = APIRouter(tags=["logs"])
     response_model=LogFileList,
     summary="Список лог-файлов",
     responses={
-        200: {"description": "Список файлов в директории логов"},
-        401: {"description": "Не авторизован"},
-        404: {"description": "Директория не найдена"},
-        500: {"description": "Не удалось получить список файлов логов"},
+        HTTPStatus.OK:
+            {"description": "Список файлов в директории логов"},
+        HTTPStatus.UNAUTHORIZED:
+            {"description": "Не авторизован"},
+        HTTPStatus.NOT_FOUND:
+            {"description": "Директория не найдена"},
+        HTTPStatus.INTERNAL_SERVER_ERROR:
+            {"description": "Не удалось получить список файлов логов"},
     },
 )
 async def list_log_files(
@@ -46,16 +51,16 @@ async def list_log_files(
     """
     error = False
     err_msg = 'Не удалось получить список файлов логов'
-    status = 200
+    status = HTTPStatus.OK
     try:
         logs = await read_log_list(settings)
     except FileNotFoundError as fnf:
         error = True
-        status = 404
+        status = HTTPStatus.NOT_FOUND
         err_msg += f': {fnf}'
     except Exception as exc:
         error = True
-        status = 500
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
         logger.exception(f'{err_msg}: {exc}')
     finally:
         if error:
@@ -72,10 +77,14 @@ async def list_log_files(
     response_class=StreamingResponse,
     summary="Live SSE стрим активного лога",
     responses={
-        200: {"description": "Server-Sent Events stream"},
-        401: {"description": "Не авторизован"},
-        404: {"description": "Файл не найден"},
-        500: {"description": "Не удалось получить поток лога"},
+        HTTPStatus.OK:
+            {"description": "Server-Sent Events stream"},
+        HTTPStatus.UNAUTHORIZED:
+            {"description": "Не авторизован"},
+        HTTPStatus.NOT_FOUND:
+            {"description": "Файл не найден"},
+        HTTPStatus.INTERNAL_SERVER_ERROR:
+            {"description": "Не удалось получить поток лога"},
     },
 )
 async def stream_logs(
@@ -91,16 +100,16 @@ async def stream_logs(
     """
     error = False
     err_msg = 'Не удалось получить поток лога'
-    status = 200
+    status = HTTPStatus.OK
     try:
         gen = await read_stream_logs(settings, level)
     except FileNotFoundError as fnf:
         error = True
-        status = 404
+        status = HTTPStatus.NOT_FOUND
         err_msg += f': {fnf}'
     except Exception as exc:
         error = True
-        status = 500
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
         logger.exception(f'{err_msg}: {exc}')
     finally:
         if error:
@@ -125,12 +134,18 @@ async def stream_logs(
     summary="Содержимое лог-файла",
     response_model=LogLines,
     responses={
-        200: {"description": "Строки лог-файла"},
-        400: {"description": "Некорректные параметры запроса"},
-        401: {"description": "Не авторизован"},
-        404: {"description": "Файл не найден"},
-        403: {"description": "Доступ запрещён (path traversal)"},
-        500: {"description": "Не удалось получить содержимое файла"},
+        HTTPStatus.OK:
+            {"description": "Строки лог-файла"},
+        HTTPStatus.BAD_REQUEST:
+            {"description": "Некорректные параметры запроса"},
+        HTTPStatus.UNAUTHORIZED:
+            {"description": "Не авторизован"},
+        HTTPStatus.NOT_FOUND:
+            {"description": "Файл не найден"},
+        HTTPStatus.FORBIDDEN:
+            {"description": "Доступ запрещён (path traversal)"},
+        HTTPStatus.INTERNAL_SERVER_ERROR:
+            {"description": "Не удалось получить содержимое файла"},
     },
 )
 async def get_log_file(
@@ -151,7 +166,7 @@ async def get_log_file(
     """
     error = False
     err_msg = 'Не удалось получить содержимое файла'
-    status = 200
+    status = HTTPStatus.OK
     try:
         log_file = await read_log_file(
             filename,
@@ -163,18 +178,18 @@ async def get_log_file(
     except PermissionError as pe:
         error = True
         err_msg += f': {pe}'
-        status = 403
+        status = HTTPStatus.FORBIDDEN
     except FileNotFoundError as fnf:
         error = True
         err_msg += f': {fnf}'
-        status = 404
+        status = HTTPStatus.NOT_FOUND
     except ValueError as ve:
         error = True
         err_msg += f': {ve}'
-        status = 400
+        status = HTTPStatus.BAD_REQUEST
     except Exception as exc:
         error = True
-        status = 500
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
         logger.exception(f'{err_msg}: {exc}')
     finally:
         if error:

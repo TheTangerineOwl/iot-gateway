@@ -135,7 +135,7 @@ class ManagementAdapter(ProtocolAdapter):
                 status=HTTPStatus.BAD_REQUEST,
             )
 
-        params = body.get("params", {})
+        params: dict = body.get("params", {})
         timeout = float(body.get("timeout", 10.0))
 
         message = Message(
@@ -145,6 +145,9 @@ class ManagementAdapter(ProtocolAdapter):
             message_topic=self._gateway.bus.topics.get(
                 TopicKey.DEVICES_COMMAND, device_id=device_id
             ),
+        )
+        command_str = command + ''.join(
+            [f' {k} {v}' for k, v in params.items()]
         )
 
         response_msg = await self._gateway._command_tracker.send_and_wait(
@@ -160,7 +163,7 @@ class ManagementAdapter(ProtocolAdapter):
                 {
                     "status": "timeout",
                     "device_id": device_id,
-                    "command": command,
+                    "command": command_str,
                     "message_id": message.message_id,
                 },
                 status=HTTPStatus.GATEWAY_TIMEOUT,
@@ -170,7 +173,7 @@ class ManagementAdapter(ProtocolAdapter):
             {
                 "status": "ok",
                 "device_id": device_id,
-                "command": command,
+                "command": command_str,
                 "message_id": message.message_id,
                 "response": response_msg.payload,
             },

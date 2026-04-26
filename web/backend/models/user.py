@@ -27,6 +27,7 @@ class User(Base):
     )
 
     def __repr__(self) -> str:
+        """Репрезентация пользователя."""
         return f"<User(id={self.id}, " \
                f"username='{self.username}', " \
                f"active={self.is_active})>"

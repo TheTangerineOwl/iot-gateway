@@ -75,7 +75,7 @@ class MessageBuilder:
     _EXCLUDE_IN_PAYLOAD: dict[str, set[str]] = {
         'all': {
             'schema_version', 'timestamp', 'payload',
-            'device_id', 'name', 'device_type',
+            'device_id', 'name', 'device_type', 'message_type',
             'protocol', 'device_status', 'last_response', 'created_at',
         },
     }

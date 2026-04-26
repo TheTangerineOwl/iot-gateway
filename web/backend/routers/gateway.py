@@ -5,8 +5,10 @@
   GET /web/api/gateway/status  — статус адаптеров и очереди сообщений
   GET /web/api/gateway/config  — базовая конфигурация шлюза
 """
-from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+import logging
+from aiohttp import ClientPayloadError
+from http import HTTPStatus
+from fastapi import APIRouter, Depends, HTTPException
 
 from web.backend.dependencies.auth import get_current_user
 from web.backend.dependencies.config import Settings, get_settings
@@ -18,6 +20,8 @@ from web.backend.services.gateway import (
     fetch_gateway_status
 )
 
+
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["gateway"])
 
 
@@ -26,26 +30,47 @@ router = APIRouter(tags=["gateway"])
     response_model=GatewayStatus,
     summary="Статус шлюза и адаптеров",
     responses={
-        200: {"description": "Статус шлюза"},
-        401: {"description": "Не авторизован"},
-        500: {"description": "Не удалось получить статус шлюза"}
+        HTTPStatus.OK:
+            {"description": "Статус шлюза"},
+        HTTPStatus.UNAUTHORIZED:
+            {"description": "Не авторизован"},
+        HTTPStatus.INTERNAL_SERVER_ERROR:
+            {"description": "Не удалось получить статус шлюза"},
+        HTTPStatus.GATEWAY_TIMEOUT:
+            {"description": "Health-check к шлюзу не вернул OK"},
+        HTTPStatus.UNPROCESSABLE_ENTITY:
+            {"description": "Шлюз не вернул статус"}
     },
 )
 async def get_gateway_status(
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
-) -> GatewayStatus | JSONResponse:
+) -> GatewayStatus:
     """Возвращает текущий статус шлюза."""
-    status = await fetch_gateway_status(settings)
-    if not status:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "detail": "не удалось получить статус шлюза",
-                "endpoint": "GET /web/api/gateway/status"
-            },
-        )
-    return status
+    error = False
+    err_msg = 'Не удалось получить статус шлюза'
+    status = HTTPStatus.OK
+    try:
+        gw_status = await fetch_gateway_status(settings)
+    except TimeoutError as te:
+        error = True
+        status = HTTPStatus.GATEWAY_TIMEOUT
+        err_msg += f': {te}'
+    except ClientPayloadError as cpe:
+        error = True
+        status = HTTPStatus.UNPROCESSABLE_ENTITY
+        err_msg += f': {cpe}'
+    except Exception:
+        error = True
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
+    finally:
+        if error:
+            logger.exception(err_msg)
+            raise HTTPException(
+                status_code=status,
+                detail=err_msg
+            )
+    return gw_status
 
 
 @router.get(
@@ -53,23 +78,44 @@ async def get_gateway_status(
     response_model=GatewayConfig,
     summary="Базовая конфигурация шлюза",
     responses={
-        200: {"description": "Конфигурация шлюза"},
-        401: {"description": "Не авторизован"},
-        500: {"description": "Не удалось получить конфигурацию шлюза"}
+        HTTPStatus.OK:
+            {"description": "Конфигурация шлюза"},
+        HTTPStatus.UNAUTHORIZED:
+            {"description": "Не авторизован"},
+        HTTPStatus.INTERNAL_SERVER_ERROR:
+            {"description": "Не удалось получить конфигурацию шлюза"},
+        HTTPStatus.GATEWAY_TIMEOUT:
+            {"description": "Health-check к шлюзу не вернул OK"},
+        HTTPStatus.UNPROCESSABLE_ENTITY:
+            {"description": "Шлюз не вернул конфигурацию"}
     },
 )
 async def get_gateway_config(
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
-) -> GatewayConfig | JSONResponse:
+) -> GatewayConfig:
     """Возвращает базовую конфигурацию шлюза."""
-    config = await fetch_gateway_config(settings)
-    if not config:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "detail": "не удалось получить конфигурацию шлюза",
-                "endpoint": "GET /web/api/gateway/config"
-            },
-        )
-    return config
+    error = False
+    err_msg = 'Не удалось получить конфигурацию шлюза'
+    status = HTTPStatus.OK
+    try:
+        gw_config = await fetch_gateway_config(settings)
+    except TimeoutError as te:
+        error = True
+        status = HTTPStatus.GATEWAY_TIMEOUT
+        err_msg += f': {te}'
+    except ClientPayloadError as cpe:
+        error = True
+        status = HTTPStatus.UNPROCESSABLE_ENTITY
+        err_msg += f': {cpe}'
+    except Exception:
+        error = True
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
+    finally:
+        if error:
+            logger.exception(err_msg)
+            raise HTTPException(
+                status_code=status,
+                detail=err_msg
+            )
+    return gw_config

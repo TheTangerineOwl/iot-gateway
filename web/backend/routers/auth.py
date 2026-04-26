@@ -8,6 +8,7 @@
 """
 import logging
 from datetime import timedelta
+from http import HTTPStatus
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from web.backend.dependencies.database import get_session
 from web.backend.dependencies.auth import get_current_user
 from web.backend.dependencies.config import Settings, get_settings
-from web.backend.schemas.auth import TokenResponse
+from web.backend.schemas.auth import TokenResponse, LoginUserMe
 from web.backend.models.user import User
 from web.backend.services.auth import create_access_token
 from web.backend.services.user_service import authenticate_user_db
@@ -30,8 +31,8 @@ router = APIRouter(tags=["auth"])
     response_model=TokenResponse,
     summary="Получить JWT access token",
     responses={
-        200: {"description": "Успешная авторизация"},
-        401: {"description": "Неверные учётные данные"},
+        HTTPStatus.OK: {"description": "Успешная авторизация"},
+        HTTPStatus.UNAUTHORIZED: {"description": "Неверные учётные данные"},
     },
 )
 async def login(
@@ -82,8 +83,8 @@ async def login(
     "/logout",
     summary="Выйти (инвалидировать токен на клиенте)",
     responses={
-        200: {"description": "Успешный выход"},
-        401: {"description": "Не авторизован"},
+        HTTPStatus.OK: {"description": "Успешный выход"},
+        HTTPStatus.UNAUTHORIZED: {"description": "Не авторизован"},
     },
 )
 async def logout(
@@ -96,21 +97,23 @@ async def logout(
 
 @router.get(
     "/me",
+    response_model=LoginUserMe,
     summary="Получить информацию о текущем пользователе",
     responses={
-        200: {"description": "Информация о пользователе"},
-        401: {"description": "Не авторизован"},
+        HTTPStatus.OK: {"description": "Информация о пользователе"},
+        HTTPStatus.UNAUTHORIZED: {"description": "Не авторизован"},
     },
 )
 async def get_me(
     current_user: User = Depends(get_current_user),
-) -> dict:
+) -> LoginUserMe:
     """
     Возвращает информацию о текущем авторизованном пользователе.
 
     Извлекает данные из JWT токена.
     """
-    return {
-        "username": current_user.username,
-        "user_id": current_user.id,
-    }
+    me = LoginUserMe(
+        username=current_user.username,  # type: ignore[arg-type]
+        id=current_user.id  # type: ignore[arg-type]
+    )
+    return me

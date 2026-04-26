@@ -27,9 +27,7 @@ _session_maker: async_sessionmaker[AsyncSession] | None = None
 
 
 async def init_db(settings: Settings) -> None:
-    """
-    Инициализация БД: создание engine, таблиц и пользователя-админа.
-    """
+    """Инициализация БД: создание engine, таблиц и пользователя-админа."""
     global _engine, _session_maker
 
     db_url = get_database_url(settings)
@@ -56,9 +54,7 @@ async def init_db(settings: Settings) -> None:
 
 
 async def create_admin_user(settings: Settings) -> None:
-    """
-    Создаёт пользователя-админа из .env, если его ещё нет в БД.
-    """
+    """Создаёт пользователя-админа из .env, если его ещё нет в БД."""
     if _session_maker is None:
         raise RuntimeError("БД не инициализирована")
 

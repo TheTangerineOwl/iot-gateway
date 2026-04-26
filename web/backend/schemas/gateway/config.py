@@ -154,6 +154,7 @@ class MQTTConfig(BaseAdapterConfig):
 
     class Broker(BaseModel):
         """MQTT-брокер."""
+
         host: Optional[str] = Field(
             default=None,
             validation_alias=AliasChoices('host', 'broker_host')

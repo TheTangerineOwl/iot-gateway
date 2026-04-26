@@ -10,15 +10,19 @@
   — отправить команду через HTTP-адаптер шлюза
 """
 import logging
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from http import HTTPStatus
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.backend.models.user import User
 from web.backend.dependencies.auth import get_current_user
 from web.backend.dependencies.config import Settings, get_settings
 from web.backend.dependencies.database import get_session
-from web.backend.schemas.devices import CommandRequest
+from web.backend.schemas.devices import (
+    DeviceList,
+    DeviceTelemetry,
+    CommandRequest, CommandResponse
+)
 from web.backend.services.devices import (
     fetch_devices,
     fetch_device,
@@ -34,37 +38,56 @@ router = APIRouter(tags=["devices"])
 @router.get(
     "/",
     summary="Список всех устройств",
+    response_model=DeviceList,
     responses={
-        200: {"description": "Список устройств"},
-        401: {"description": "Не авторизован"},
-        502: {"description": "Шлюз недоступен"},
+        HTTPStatus.OK: {"description": "Список устройств"},
+        HTTPStatus.UNAUTHORIZED: {"description": "Не авторизован"},
+        HTTPStatus.GATEWAY_TIMEOUT: {"description": "Шлюз недоступен"},
+        HTTPStatus.INTERNAL_SERVER_ERROR:
+            {"description": "Не удалось получить устройства"}
     },
 )
 async def list_devices(
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
-) -> JSONResponse:
+) -> DeviceList:
     """Возвращает список всех зарегистрированных устройств из реестра шлюза."""
-    devices = await fetch_devices(settings)
-    if devices is None:
-        return JSONResponse(
-            status_code=502,
-            content={"detail": "шлюз недоступен"},
-        )
-    return JSONResponse(
-        status_code=200,
-        content={"devices": devices, "total": len(devices)},
-    )
+    error = False
+    status = HTTPStatus.OK
+    err_msg = 'Не удалось получить устройства: '
+    try:
+        devices = await fetch_devices(settings)
+    except TimeoutError as te:
+        error = True
+        status = HTTPStatus.GATEWAY_TIMEOUT
+        err_msg += f': {te}'
+    except Exception:
+        error = True
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
+    finally:
+        if error:
+            logger.exception(err_msg)
+            raise HTTPException(
+                status_code=status,
+                detail=err_msg
+            )
+    return devices
 
 
 @router.get(
     "/{device_id}",
     summary="Детали устройства",
+    response_model=DeviceTelemetry,
     responses={
-        200: {"description": "Детали устройства и последняя телеметрия"},
-        401: {"description": "Не авторизован"},
-        404: {"description": "Устройство не найдено"},
-        502: {"description": "Шлюз недоступен"},
+        HTTPStatus.OK:
+            {"description": "Детали устройства и последняя телеметрия"},
+        HTTPStatus.UNAUTHORIZED:
+            {"description": "Не авторизован"},
+        HTTPStatus.NOT_FOUND:
+            {"description": "Устройство не найдено"},
+        HTTPStatus.GATEWAY_TIMEOUT: {"description": "Шлюз недоступен"},
+        HTTPStatus.INTERNAL_SERVER_ERROR:
+            {"description": "Не удалось получить устройство"}
     },
 )
 async def get_device(
@@ -78,42 +101,62 @@ async def get_device(
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
     db: AsyncSession = Depends(get_session),
-) -> JSONResponse:
+) -> DeviceTelemetry:
     """Возвращает детали устройства и последние N записей телеметрии."""
-    device = await fetch_device(settings, device_id)
+    error = False
+    status = HTTPStatus.OK
+    err_msg = 'Не удалось получить устройство: '
+    try:
+        device = await fetch_device(settings, device_id)
+    except TimeoutError as te:
+        error = True
+        status = HTTPStatus.GATEWAY_TIMEOUT
+        err_msg += f': {te}'
+    except Exception:
+        error = True
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
+    finally:
+        if error:
+            logger.exception(err_msg)
+            raise HTTPException(
+                status_code=status,
+                detail=err_msg
+            )
 
-    if device is None:
-        # Шлюз вернул 404 или недоступен — различаем по тому, что вернулось
-        # fetch_device возвращает None как при 404, так и при сетевой ошибке.
-        # При необходимости можно расширить fetch_device для передачи статуса.
-        return JSONResponse(
-            status_code=404,
-            content={
-                "detail":
-                    f"устройство '{device_id}' не найдено или шлюз недоступен"
-            },
-        )
-
-    telemetry = await fetch_last_telemetry(db, device_id, limit=limit)
-
-    return JSONResponse(
-        status_code=200,
-        content={
-            "device": device,
-            "telemetry": telemetry,
-        },
-    )
+    err_msg = 'Не удалось получить телеметрию: '
+    try:
+        telemetry = await fetch_last_telemetry(db, device_id, limit=limit)
+        result = DeviceTelemetry(device=device, telemetry=telemetry)
+    except ValueError as te:
+        error = True
+        status = HTTPStatus.BAD_REQUEST
+        err_msg += f': {te}'
+    except Exception:
+        error = True
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
+    finally:
+        if error:
+            logger.exception(err_msg)
+            raise HTTPException(
+                status_code=status,
+                detail=err_msg
+            )
+    return result
 
 
 @router.post(
     "/{device_id}/command",
+    response_model=CommandResponse,
     summary="Отправить команду устройству",
     responses={
-        200: {"description": "Команда отправлена, получен ответ"},
-        400: {"description": "Некорректное тело запроса"},
-        401: {"description": "Не авторизован"},
-        502: {"description": "Шлюз недоступен"},
-        504: {"description": "Устройство не ответило за отведённое время"},
+        HTTPStatus.OK:
+            {"description": "Команда отправлена, получен ответ"},
+        HTTPStatus.BAD_REQUEST:
+            {"description": "Некорректное тело запроса"},
+        HTTPStatus.UNAUTHORIZED:
+            {"description": "Не авторизован"},
+        HTTPStatus.GATEWAY_TIMEOUT:
+            {"description": "Устройство не ответило за отведённое время"},
     },
 )
 async def send_command(
@@ -121,16 +164,37 @@ async def send_command(
     body: CommandRequest,
     current_user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
-) -> JSONResponse:
+) -> CommandResponse:
     """
-    Проксирует команду на management-адаптер шлюза:
+    Проксирует команду на management-адаптер шлюза.
+
     POST {gateway_management_url}/management/devices/{device_id}/command
     """
-    status_code, response_body = await send_device_command(
-        settings=settings,
-        device_id=device_id,
-        command=body.command,
-        params=body.params,
-    )
-
-    return JSONResponse(status_code=status_code, content=response_body)
+    error = False
+    status = HTTPStatus.OK
+    err_msg = 'Ошибка отправки команды: '
+    try:
+        response = await send_device_command(
+            settings=settings,
+            device_id=device_id,
+            request=body
+        )
+    except ValueError as ve:
+        error = True
+        status = HTTPStatus.BAD_REQUEST
+        err_msg += f': {ve}'
+    except TimeoutError as te:
+        error = True
+        status = HTTPStatus.GATEWAY_TIMEOUT
+        err_msg += f': {te}'
+    except Exception:
+        error = True
+        status = HTTPStatus.INTERNAL_SERVER_ERROR
+    finally:
+        if error:
+            logger.exception(err_msg)
+            raise HTTPException(
+                status_code=status,
+                detail=err_msg
+            )
+    return response

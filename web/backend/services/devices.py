@@ -4,45 +4,58 @@
 Работает через HTTP/TCP к запущенному шлюзу.
 """
 import logging
-import aiohttp
+from aiohttp import ClientPayloadError
+from http import HTTPStatus
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from web.backend.dependencies.config import Settings
-from web.backend.services.gateway import _http_health
+from web.backend.services.management import fetch_from_gateway, send_post
+from web.backend.schemas.devices import (
+    Device, DeviceList,
+    CommandRequest, CommandResponse,
+    Telemetry, TelemetryList
+)
 
 
 logger = logging.getLogger(__name__)
 
 
-async def fetch_devices(settings: Settings) -> list[dict] | None:
+SELECT_DEVICES_SQL = """
+SELECT device_id, payload, timestamp, message_id
+ FROM telemetry
+ WHERE device_id = :device_id
+ ORDER BY timestamp DESC
+ LIMIT :limit
+"""
+
+
+async def fetch_devices(settings: Settings) -> DeviceList:
     """Получить список устройств из management-адаптера."""
     url = f"{settings.gateway_management_url.rstrip('/')}/management/devices/"
-    ok, body = await _http_health(url, settings.check_timeout)
-    if not ok or not body:
-        return None
-    return body.get("devices", [])
+    body = await fetch_from_gateway(url, settings.check_timeout)
+    devices = body.get("devices")
+    if not devices:
+        raise KeyError("'devices' не в теле ответа")
+    total = len(devices)
+    return DeviceList(devices=devices, total=total)
 
 
-async def fetch_device(settings: Settings, device_id: str) -> dict | None:
+async def fetch_device(settings: Settings, device_id: str) -> Device:
     """Получить данные одного устройства из management-адаптера."""
     url = (
         f"{settings.gateway_management_url.rstrip('/')}"
         f"/management/devices/{device_id}"
     )
-    ok, body = await _http_health(url, settings.check_timeout)
-    if not ok or not body:
-        return None
-    return body
+    body = await fetch_from_gateway(url, settings.check_timeout)
+    return Device(**body)
 
 
 async def send_device_command(
     settings: Settings,
     device_id: str,
-    command: str,
-    params: dict | None = None,
-    timeout: float = 10.0,
-) -> tuple[int, dict]:
+    request: CommandRequest
+) -> CommandResponse:
     """
     Проксировать команду на management-адаптер шлюза.
 
@@ -53,36 +66,30 @@ async def send_device_command(
         f"{settings.gateway_management_url.rstrip('/')}"
         f"/management/devices/{device_id}/command"
     )
-    payload = {"command": command, "params": params or {}, "timeout": timeout}
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=timeout + 2),
-            ) as resp:
-                body = await resp.json(content_type=None)
-                return resp.status, body
-    except Exception as exc:
-        logger.warning("Не удалось отправить команду на шлюз: %s", exc)
-        return 502, {"error": str(exc)}
+    payload = request.model_dump()
+    status, body = await send_post(url, payload, request.timeout + 2)
+    if status < 300 and body:
+        response = CommandResponse(**body)
+    elif status == HTTPStatus.GATEWAY_TIMEOUT:
+        raise TimeoutError('Таймаут')
+    elif status == HTTPStatus.BAD_GATEWAY or not body:
+        raise ClientPayloadError('Не удалось отправить команду')
+    return response
 
 
 async def fetch_last_telemetry(
     db: AsyncSession,
     device_id: str,
     limit: int = 20,
-) -> list[dict]:
+) -> TelemetryList:
     """Получить последние N записей телеметрии для устройства из БД."""
+    if limit <= 0:
+        raise ValueError('limit должен быть положительным')
     result = await db.execute(
-        text(
-            "SELECT device_id, payload, timestamp, message_id, protocol "
-            "FROM telemetry "
-            "WHERE device_id = :device_id "
-            "ORDER BY timestamp DESC "
-            "LIMIT :limit"
-        ),
+        text(SELECT_DEVICES_SQL),
         {"device_id": device_id, "limit": limit},
     )
     rows = result.mappings().all()
-    return [dict(row) for row in rows]
+    # dicts = [dict(row) for row in rows]
+    telemetry = [Telemetry(**row) for row in rows][:limit]
+    return TelemetryList(telemetry=telemetry, total=len(telemetry))

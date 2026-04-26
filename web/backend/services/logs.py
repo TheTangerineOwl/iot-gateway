@@ -63,6 +63,7 @@ async def read_log_file(
     level: str | None = None,
     search: str | None = None,
 ) -> LogLines:
+    """Получить содержимое лог-файла."""
     logs_dir = Path(settings.logs_dir).resolve()
     file_path = (logs_dir / filename).resolve()
 
@@ -114,6 +115,7 @@ async def read_stream_logs(
     settings: Settings,
     level: str = "INFO",
 ) -> AsyncIterable[str]:
+    """Получить SSE-поток из активного файла лога."""
     logs_dir = Path(settings.logs_dir)
 
     if not logs_dir.exists():

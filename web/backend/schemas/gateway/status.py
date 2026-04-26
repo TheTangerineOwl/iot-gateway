@@ -303,11 +303,13 @@ class GatewayStatus(BaseModel):
     )
     @property
     def checked_at(self) -> datetime:
+        """Время получения статуса."""
         return datetime.now(timezone.utc)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def uptime(self) -> timedelta:
+        """Время работы шлюза."""
         now = datetime.now(timezone.utc)
         if self.general and self.general.start_time:
             return now - self.general.start_time

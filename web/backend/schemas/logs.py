@@ -17,6 +17,7 @@ class LogFile(BaseModel):
     @field_validator('filename')
     @classmethod
     def validate_filename(cls, v: str) -> str:
+        """Валидация имени файла."""
         if not v:
             raise ValueError('filename не может быть пустым')
         if re.search(r'[<>:"\\|?*]', v):
@@ -28,6 +29,7 @@ class LogFile(BaseModel):
     @field_validator('size_bytes')
     @classmethod
     def validate_size(cls, v: int) -> int:
+        """Валидация размера файла."""
         if v < 0:
             raise ValueError('size_bytes не может быть отрицательным')
         return v
@@ -35,6 +37,7 @@ class LogFile(BaseModel):
     @field_validator('modified_at')
     @classmethod
     def validate_modified_at(cls, v: datetime):
+        """Валидация поля modified_at."""
         if not v.tzinfo:
             val = v.replace(tzinfo=timezone.utc)
         else:
@@ -54,6 +57,7 @@ class LogFileList(BaseModel):
     @field_validator('total')
     @classmethod
     def validate_total(cls, v: int, info) -> int:
+        """Валидация количества файлов."""
         files = info.data.get('files', [])
         if v != len(files):
             raise ValueError(
@@ -65,6 +69,7 @@ class LogFileList(BaseModel):
     @field_validator('logs_dir')
     @classmethod
     def validate_logs_dir(cls, v: str) -> str:
+        """Валидация пути к директории лога."""
         if not v:
             raise ValueError('logs_dir не может быть пустым')
         path = Path(v)
@@ -85,6 +90,7 @@ class LogLines(BaseModel):
 
     @model_validator(mode='after')
     def validate_consistency(self):
+        """Валидация модели."""
         if self.filtered_lines > self.total_lines:
             raise ValueError(
                 'filtered_lines не может превышать total_lines'
@@ -98,6 +104,7 @@ class LogLines(BaseModel):
     @field_validator('lines')
     @classmethod
     def validate_lines(cls, v: List[str]) -> List[str]:
+        """Валидация количества строк."""
         for line in v:
             if not isinstance(line, str):
                 raise ValueError('Все элементы lines должны быть строками')
@@ -108,6 +115,7 @@ class LogLines(BaseModel):
     @field_validator('level_filter')
     @classmethod
     def validate_level_filter(cls, v: Optional[str]) -> Optional[str]:
+        """Валидация фильтра."""
         if v is None:
             return v
         valid_levels = {'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}
@@ -118,6 +126,7 @@ class LogLines(BaseModel):
     @field_validator('search_filter')
     @classmethod
     def validate_search_filter(cls, v: Optional[str]) -> Optional[str]:
+        """Валидация поиска."""
         if v is not None:
             if len(v) > 255:
                 raise ValueError('Поисковый запрос слишком длинный')
@@ -128,6 +137,7 @@ class LogLines(BaseModel):
     @field_validator('total_lines', 'filtered_lines')
     @classmethod
     def validate_line_counts(cls, v: int) -> int:
+        """Валидация количества строк."""
         if v < 0:
             raise ValueError('Количество строк не может быть отрицательным')
         return v

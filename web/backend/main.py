@@ -118,6 +118,7 @@ _static_dir = Path(__file__).parent / "static"
 async def spa_fallback(full_path: str) -> FileResponse | JSONResponse:
     """
     Фолбек для маршрутизации.
+
     Перехватывает все пути, не совпавшие с API или статикой,
     и возвращает index.html — необходимо для React Router.
     """
