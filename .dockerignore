@@ -266,3 +266,7 @@ config/configuration/**/*/running.yaml
 config/configuration/**/*/default.yaml
 config/configuration/**/*/testing.yaml
 config/configuration/public_config_whitelist.txt
+
+web/static
+web/frontend/package-lock.json
+web/frontend/node_modules

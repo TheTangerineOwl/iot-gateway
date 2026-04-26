@@ -1,0 +1,256 @@
+/** Базовый URL бэкенда. В dev — проксируется через vite, в prod — тот же origin. */
+const BASE = import.meta.env.VITE_API_BASE ?? '';
+
+function getToken(): string | null {
+  return localStorage.getItem('token');
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem('token', token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem('token');
+}
+
+export function isAuthenticated(): boolean {
+  return !!getToken();
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+
+  if (res.status === 401) {
+    clearToken();
+    window.location.href = '/login';
+    throw new Error('Unauthorized');
+  }
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {}
+    throw new Error(detail);
+  }
+
+  // 204 No Content
+  if (res.status === 204) return undefined as T;
+
+  return res.json() as Promise<T>;
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export async function login(username: string, password: string): Promise<TokenResponse> {
+  const body = new URLSearchParams({ username, password });
+  const res = await fetch(`${BASE}/web/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { const b = await res.json(); detail = b.detail ?? detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+export async function logout(): Promise<void> {
+  await request('/web/api/auth/logout', { method: 'POST' });
+}
+
+export interface UserMe {
+  id: number;
+  username: string;
+}
+
+export async function getMe(): Promise<UserMe> {
+  return request<UserMe>('/web/api/auth/me');
+}
+
+// ─── Gateway ─────────────────────────────────────────────────────────────────
+
+export interface AdapterStatus {
+  protocol?: string;
+  running?: boolean;
+  connections?: number;
+  connected?: boolean;
+  broker?: string;
+}
+
+export interface PipelineStatus {
+  stages?: number;
+  processed?: number;
+  filtered?: number;
+  errors?: number;
+}
+
+export interface MessageBusStatus {
+  published?: number;
+  delivered?: number;
+  errors?: number;
+  queue_size?: number;
+  max_queue?: number;
+  subscribers?: number;
+}
+
+export interface RegistryStatus {
+  total?: number;
+  online_count?: number;
+}
+
+export interface GeneralGatewayStatus {
+  id?: string;
+  name?: string;
+  running?: boolean;
+  start_time?: string;
+}
+
+export interface GatewayStatus {
+  general?: GeneralGatewayStatus;
+  devices?: RegistryStatus;
+  bus?: MessageBusStatus;
+  pipeline?: PipelineStatus;
+  adapters?: Record<string, AdapterStatus>;
+  uptime_seconds?: number;
+}
+
+export async function getGatewayStatus(): Promise<GatewayStatus> {
+  return request<GatewayStatus>('/web/api/gateway/status');
+}
+
+export interface GatewayConfig {
+  general_config?: {
+    general?: { id?: string; name?: string; storage?: string };
+    devices?: { max_devices?: number; timeout_stale?: number; check_interval?: number };
+    bus?: { max_queue?: number; timeout?: number };
+    logger?: { dir?: string; debug?: boolean; level?: string };
+  };
+  adapter_configs?: Record<string, {
+    enabled?: boolean;
+    host?: string;
+    port?: number;
+    url_root?: string;
+    timeout_reject?: number;
+    [key: string]: unknown;
+  }>;
+}
+
+export async function getGatewayConfig(): Promise<GatewayConfig> {
+  return request<GatewayConfig>('/web/api/gateway/config');
+}
+
+// ─── Devices ─────────────────────────────────────────────────────────────────
+
+export interface Device {
+  device_id: string;
+  name?: string;
+  protocol?: string;
+  registered_at?: string;
+  last_seen?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DeviceList {
+  devices: Device[];
+  total: number;
+}
+
+export async function getDevices(): Promise<DeviceList> {
+  return request<DeviceList>('/web/api/devices/');
+}
+
+export interface TelemetryRecord {
+  device_id: string;
+  payload: Record<string, unknown>;
+  timestamp: string;
+}
+
+export interface DeviceTelemetry {
+  device: Device;
+  telemetry: {
+    records: TelemetryRecord[];
+    total: number;
+  };
+}
+
+export async function getDevice(deviceId: string, limit = 20): Promise<DeviceTelemetry> {
+  return request<DeviceTelemetry>(`/web/api/devices/${encodeURIComponent(deviceId)}?limit=${limit}`);
+}
+
+export interface CommandRequest {
+  command: string;
+  params?: Record<string, unknown>;
+  timeout?: number;
+}
+
+export interface CommandResponse {
+  status: string;
+  device_id: string;
+  command: string;
+}
+
+export async function sendCommand(deviceId: string, body: CommandRequest): Promise<CommandResponse> {
+  return request<CommandResponse>(`/web/api/devices/${encodeURIComponent(deviceId)}/command`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// ─── Logs ────────────────────────────────────────────────────────────────────
+
+export interface LogFileList {
+  files: string[];
+  total: number;
+}
+
+export async function getLogFiles(): Promise<LogFileList> {
+  return request<LogFileList>('/web/api/logs/list');
+}
+
+export interface LogLines {
+  filename: string;
+  lines: string[];
+  total: number;
+}
+
+export async function getLogFile(
+  filename: string,
+  params?: { lines?: number; level?: string; search?: string }
+): Promise<LogLines> {
+  const q = new URLSearchParams();
+  if (params?.lines) q.set('lines', String(params.lines));
+  if (params?.level) q.set('level', params.level);
+  if (params?.search) q.set('search', params.search);
+  const qs = q.toString() ? `?${q}` : '';
+  return request<LogLines>(`/web/api/logs/${encodeURIComponent(filename)}${qs}`);
+}
+
+export function streamLogs(level = 'INFO'): EventSource {
+  const token = getToken();
+  // SSE не поддерживает headers — передаём токен через query (если бэкенд поддерживает)
+  // Иначе — подключаемся без токена (CORS allow * уже настроен)
+  return new EventSource(
+    `${BASE}/web/api/logs/stream?level=${level}${token ? `&token=${token}` : ''}`
+  );
+}
