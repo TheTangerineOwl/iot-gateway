@@ -1,5 +1,6 @@
 """Схемы для девайсов."""
 import logging
+from json import loads
 from datetime import datetime, timezone
 from typing import Any, Optional
 from pydantic import (
@@ -72,7 +73,7 @@ class Device(BaseModel):
         if isinstance(v, str):
             val = datetime.fromisoformat(v)
         elif isinstance(v, float):
-            val = datetime.fromtimestamp(v)
+            val = datetime.fromtimestamp(v, tz=timezone.utc)
         else:
             val = v
         now = datetime.now(tz=timezone.utc)
@@ -80,7 +81,7 @@ class Device(BaseModel):
             orig = val.replace(tzinfo=timezone.utc)
         else:
             orig = val.astimezone(timezone.utc)
-        if datetime.now(tz=timezone.utc) < orig:
+        if now < orig:
             logger.warning(
                 'Ошибка валидации для registered_at: '
                 'registered_at не может быть в будущем'
@@ -95,7 +96,7 @@ class Device(BaseModel):
         if isinstance(v, str):
             val = datetime.fromisoformat(v)
         elif isinstance(v, float):
-            val = datetime.fromtimestamp(v)
+            val = datetime.fromtimestamp(v, tz=timezone.utc)
         else:
             val = v
         now = datetime.now(tz=timezone.utc)
@@ -103,7 +104,7 @@ class Device(BaseModel):
             orig = val.replace(tzinfo=timezone.utc)
         else:
             orig = val.astimezone(timezone.utc)
-        if datetime.now(tz=timezone.utc) < orig:
+        if now < orig:
             logger.warning(
                 'Ошибка валидации для last_seen: '
                 'last_seen не может быть в будущем'
@@ -175,6 +176,17 @@ class Telemetry(BaseModel):
         }
     )
 
+    @field_validator('payload', mode='before')
+    @classmethod
+    def validate_payload(cls, v: str | dict[str, Any]) -> dict[str, Any]:
+        """Валидация нагрузки телеметрии."""
+        if not isinstance(v, dict):
+            s = loads(str(v))
+            val = s
+        else:
+            val = v
+        return val
+
     @field_validator('timestamp', mode='before')
     @classmethod
     def validate_timestamp(cls, v: datetime | str | float) -> datetime:
@@ -182,7 +194,7 @@ class Telemetry(BaseModel):
         if isinstance(v, str):
             val = datetime.fromisoformat(v)
         elif isinstance(v, float):
-            val = datetime.fromtimestamp(v)
+            val = datetime.fromtimestamp(v, tz=timezone.utc)
         else:
             val = v
         now = datetime.now(tz=timezone.utc)
@@ -190,7 +202,7 @@ class Telemetry(BaseModel):
             orig = val.replace(tzinfo=timezone.utc)
         else:
             orig = val.astimezone(timezone.utc)
-        if datetime.now(tz=timezone.utc) < orig:
+        if now < orig:
             logger.warning(
                 'Ошибка валидации для timestamp: '
                 'timestamp не может быть в будущем'
@@ -222,7 +234,7 @@ class TelemetryList(BaseModel):
     @classmethod
     def validate_total(cls, v: int, info) -> int:
         """Валидация количества записей."""
-        records = info.data.get('telemetry', [])
+        records = info.data.get('records', [])
         if v != len(records):
             raise ValueError(
                 f'total ({v}) не соответствует '

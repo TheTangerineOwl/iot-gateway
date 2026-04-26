@@ -106,7 +106,7 @@ app.include_router(gateway.router, prefix="/web/api/gateway")
 app.include_router(devices.router, prefix="/web/api/devices")
 app.include_router(logs.router, prefix="/web/api/logs")
 
-_static_dir = Path(__file__).parent / "static"
+_static_dir = Path(__file__).parent.parent / "static"
 
 
 @app.get(

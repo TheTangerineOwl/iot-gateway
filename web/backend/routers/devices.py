@@ -105,7 +105,7 @@ async def get_device(
     """Возвращает детали устройства и последние N записей телеметрии."""
     error = False
     status = HTTPStatus.OK
-    err_msg = 'Не удалось получить устройство: '
+    err_msg = 'Не удалось получить устройство'
     try:
         device = await fetch_device(settings, device_id)
     except TimeoutError as te:
@@ -123,7 +123,7 @@ async def get_device(
                 detail=err_msg
             )
 
-    err_msg = 'Не удалось получить телеметрию: '
+    err_msg = 'Не удалось получить телеметрию'
     try:
         telemetry = await fetch_last_telemetry(db, device_id, limit=limit)
         result = DeviceTelemetry(device=device, telemetry=telemetry)
@@ -172,7 +172,7 @@ async def send_command(
     """
     error = False
     status = HTTPStatus.OK
-    err_msg = 'Ошибка отправки команды: '
+    err_msg = 'Ошибка отправки команды'
     try:
         response = await send_device_command(
             settings=settings,

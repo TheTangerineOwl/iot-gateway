@@ -90,6 +90,5 @@ async def fetch_last_telemetry(
         {"device_id": device_id, "limit": limit},
     )
     rows = result.mappings().all()
-    # dicts = [dict(row) for row in rows]
     telemetry = [Telemetry(**row) for row in rows][:limit]
     return TelemetryList(telemetry=telemetry, total=len(telemetry))
