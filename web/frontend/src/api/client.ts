@@ -66,10 +66,12 @@ export async function login(username: string, password: string): Promise<TokenRe
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   });
-
   if (!res.ok) {
     let detail = res.statusText;
-    try { const b = await res.json(); detail = b.detail ?? detail; } catch {}
+    try {
+      const b = await res.json();
+      detail = b.detail ?? detail;
+    } catch {}
     throw new Error(detail);
   }
   return res.json();
@@ -146,14 +148,7 @@ export interface GatewayConfig {
     bus?: { max_queue?: number; timeout?: number };
     logger?: { dir?: string; debug?: boolean; level?: string };
   };
-  adapter_configs?: Record<string, {
-    enabled?: boolean;
-    host?: string;
-    port?: number;
-    url_root?: string;
-    timeout_reject?: number;
-    [key: string]: unknown;
-  }>;
+  adapter_configs?: Record<string, unknown>;
 }
 
 export async function getGatewayConfig(): Promise<GatewayConfig> {
@@ -195,7 +190,9 @@ export interface DeviceTelemetry {
 }
 
 export async function getDevice(deviceId: string, limit = 20): Promise<DeviceTelemetry> {
-  return request<DeviceTelemetry>(`/web/api/devices/${encodeURIComponent(deviceId)}?limit=${limit}`);
+  return request<DeviceTelemetry>(
+    `/web/api/devices/${encodeURIComponent(deviceId)}?limit=${limit}`
+  );
 }
 
 export interface CommandRequest {
@@ -210,11 +207,14 @@ export interface CommandResponse {
   command: string;
 }
 
-export async function sendCommand(deviceId: string, body: CommandRequest): Promise<CommandResponse> {
-  return request<CommandResponse>(`/web/api/devices/${encodeURIComponent(deviceId)}/command`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+export async function sendCommand(
+  deviceId: string,
+  body: CommandRequest
+): Promise<CommandResponse> {
+  return request<CommandResponse>(
+    `/web/api/devices/${encodeURIComponent(deviceId)}/command`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
 }
 
 // ─── Logs ────────────────────────────────────────────────────────────────────
@@ -226,15 +226,33 @@ export interface LogFile {
   is_active: boolean;
 }
 
-export interface LogLines {
-  lines: string[];
+export interface LogFileList {
+  files: LogFile[];
   total: number;
+  logs_dir: string;
 }
 
-export async function getLogFiles(): Promise<LogFile[]> {
-  return request<LogFile[]>('/web/api/logs/files');
+export interface LogLines {
+  filename: string;
+  lines: string[];
+  total_lines: number;
+  filtered_lines: number;
+  level_filter: string | null;
+  search_filter: string | null;
 }
 
+/**
+ * Получение списка лог-файлов.
+ * Эндпоинт: GET /web/api/logs/list
+ */
+export async function getLogFiles(): Promise<LogFileList> {
+  return request<LogFileList>('/web/api/logs/list');
+}
+
+/**
+ * Получение содержимого лог-файла.
+ * Эндпоинт: GET /web/api/logs/{filename}
+ */
 export async function getLogFile(
   filename: string,
   params: { level?: string; search?: string; lines?: number } = {}
@@ -244,5 +262,5 @@ export async function getLogFile(
   if (params.search) q.set('search', params.search);
   if (params.lines) q.set('lines', String(params.lines));
   const qs = q.toString() ? `?${q.toString()}` : '';
-  return request<LogLines>(`/web/api/logs/files/${encodeURIComponent(filename)}${qs}`);
+  return request<LogLines>(`/web/api/logs/${encodeURIComponent(filename)}${qs}`);
 }

@@ -103,7 +103,7 @@ function FileViewer({ filename }: FileViewerProps) {
           ↺
         </button>
         {data && (
-          <span className="text-gray-400 ml-auto">{data.total} строк</span>
+          <span className="text-gray-400 ml-auto">{data.filtered_lines} строк</span>
         )}
       </div>
 
@@ -172,7 +172,7 @@ function LiveStream() {
             onChange={e => setStreamLevel(e.target.value)}
             className="border border-gray-200 rounded px-2 py-1 bg-white"
           >
-            {['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'].map(l => (
+            {LOG_LEVELS.map(l => (
               <option key={l} value={l}>{l}</option>
             ))}
           </select>
@@ -293,7 +293,7 @@ export default function LogsPage() {
             {error && <ErrorBox message={error} onRetry={refetch} />}
             {data && (
               <FileList
-                files={data}
+                files={data.files}
                 selected={selected}
                 onSelect={setSelected}  // ✅ setSelected принимает string
               />
