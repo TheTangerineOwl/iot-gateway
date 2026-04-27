@@ -15,6 +15,8 @@ COPY .env.example .env
 
 RUN mkdir -p logs data
 
+RUN cp config/configuration/public_config_whitelist.example.txt public_config_whitelist.txt
+
 # Порты, которые слушает шлюз
 EXPOSE 8081
 EXPOSE 8082

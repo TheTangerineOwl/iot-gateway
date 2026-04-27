@@ -1,43 +1,46 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { clearToken } from '../api/client';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { clearToken, logout } from '../api/client';
 
 const NAV_ITEMS = [
-  { to: '/',        label: 'Статус',     exact: true },
-  { to: '/devices', label: 'Устройства', exact: false },
-  { to: '/logs',    label: 'Логи',       exact: false },
+  { to: '/', label: 'Дашборд', end: true },
+  { to: '/devices', label: 'Устройства', end: false },
+  { to: '/logs', label: 'Логи', end: false },
 ];
 
-export default function Layout() {
+export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
-  function handleLogout() {
-    clearToken();
-    navigate('/login', { replace: true });
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch {
+      // игнорируем ошибки при логауте (например, если токен уже протух)
+    } finally {
+      clearToken();
+      navigate('/login', { replace: true });
+    }
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 border-b-2 border-blue-700 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
-          {/* Logo / Brand */}
-          <span className="text-xl font-black tracking-tight text-blue-800 select-none">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-white border-b-2 border-gray-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex h-14 items-center justify-between gap-4">
+          <span className="text-lg font-black text-gray-900 tracking-tight">
             IoT Gateway
           </span>
-
-          {/* Nav */}
-          <nav className="flex gap-1" aria-label="Основная навигация">
-            {NAV_ITEMS.map(({ to, label, exact }) => (
+          <nav className="flex items-center gap-1">
+            {NAV_ITEMS.map(({ to, label, end }) => (
               <NavLink
                 key={to}
                 to={to}
-                end={exact}
+                end={end}
                 className={({ isActive }) =>
                   [
-                    'rounded-md px-4 py-2 text-base font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+                    'px-3 py-1.5 rounded-lg text-sm font-bold transition-colors',
                     isActive
-                      ? 'bg-blue-700 text-white'
-                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-800',
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100',
                   ].join(' ')
                 }
               >
@@ -45,20 +48,18 @@ export default function Layout() {
               </NavLink>
             ))}
           </nav>
-
-          {/* Logout — pushed to right */}
           <button
             onClick={handleLogout}
-            className="ml-auto rounded-md border-2 border-orange-500 bg-white px-4 py-1.5 text-sm font-bold text-orange-600 hover:bg-orange-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 transition-colors"
+            className="text-sm font-bold text-gray-500 hover:text-red-600 transition-colors px-2 py-1"
           >
             Выйти
           </button>
         </div>
       </header>
 
-      {/* ── Page content ───────────────────────────────────────────────── */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
-        <Outlet />
+      {/* Content */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
+        {children}
       </main>
     </div>
   );

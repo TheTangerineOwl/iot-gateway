@@ -1,33 +1,51 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, DependencyList } from 'react';
+import { UnauthorizedError, clearToken } from '../api/client';
 
 interface FetchState<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+  unauthorized: boolean;
+}
+
+interface UseFetchResult<T> extends FetchState<T> {
   refetch: () => void;
 }
 
 export function useFetch<T>(
   fetcher: () => Promise<T>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  deps: any[]
-): FetchState<T> {
-  const [data, setData]       = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const counter               = useRef(0);
+  deps: DependencyList
+): UseFetchResult<T> {
+  const [state, setState] = useState<FetchState<T>>({
+    data: null,
+    loading: true,
+    error: null,
+    unauthorized: false,
+  });
 
-  const run = useCallback(() => {
-    const id = ++counter.current;
-    setLoading(true);
-    setError(null);
-    fetcher()
-      .then(res => { if (counter.current === id) { setData(res); setLoading(false); } })
-      .catch(err => { if (counter.current === id) { setError(err?.message ?? 'Ошибка'); setLoading(false); } });
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+
+  const run = useCallback(async () => {
+    setState(prev => ({ ...prev, loading: true, error: null, unauthorized: false }));
+    try {
+      const data = await fetcherRef.current();
+      setState({ data, loading: false, error: null, unauthorized: false });
+    } catch (e: unknown) {
+      if (e instanceof UnauthorizedError) {
+        clearToken();
+        setState({ data: null, loading: false, error: null, unauthorized: true });
+      } else {
+        const msg = e instanceof Error ? e.message : String(e);
+        setState(prev => ({ ...prev, loading: false, error: msg }));
+      }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  useEffect(() => { run(); }, [run]);
+  useEffect(() => {
+    run();
+  }, [run]);
 
-  return { data, loading, error, refetch: run };
+  return { ...state, refetch: run };
 }

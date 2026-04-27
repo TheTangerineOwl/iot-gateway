@@ -1,17 +1,26 @@
-/** Базовый URL бэкенда. В dev — проксируется через vite, в prod — тот же origin. */
 const BASE = import.meta.env.VITE_API_BASE ?? '';
 
 function getToken(): string | null {
   return localStorage.getItem('token');
 }
+
 export function setToken(token: string): void {
   localStorage.setItem('token', token);
 }
+
 export function clearToken(): void {
   localStorage.removeItem('token');
 }
+
 export function isAuthenticated(): boolean {
   return !!getToken();
+}
+
+export class UnauthorizedError extends Error {
+  constructor() {
+    super('Unauthorized');
+    this.name = 'UnauthorizedError';
+  }
 }
 
 async function request<T>(
@@ -29,9 +38,9 @@ async function request<T>(
 
   if (res.status === 401) {
     clearToken();
-    window.location.href = '/login';
-    throw new Error('Unauthorized');
+    throw new UnauthorizedError();
   }
+
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -40,6 +49,7 @@ async function request<T>(
     } catch {}
     throw new Error(detail);
   }
+
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -77,8 +87,9 @@ export interface UserMe {
   id: number;
   username: string;
 }
+
 export async function getMe(): Promise<UserMe> {
-  return request<UserMe>('/web/api/auth/me');
+  return request('/web/api/auth/me');
 }
 
 // ─── Gateway ───────────────────────────────────────────────────────────────────
@@ -119,10 +130,10 @@ export interface GatewayStatus {
   bus?: MessageBusStatus;
   pipeline?: PipelineStatus;
   adapters?: Record<string, AdapterStatus>;
-  uptime_seconds?: number;
+  uptime?: number;
 }
 export async function getGatewayStatus(): Promise<GatewayStatus> {
-  return request<GatewayStatus>('/web/api/gateway/status');
+  return request('/web/api/gateway/status');
 }
 
 export interface GatewayConfig {
@@ -135,7 +146,7 @@ export interface GatewayConfig {
   adapter_configs?: Record<string, unknown>;
 }
 export async function getGatewayConfig(): Promise<GatewayConfig> {
-  return request<GatewayConfig>('/web/api/gateway/config');
+  return request('/web/api/gateway/config');
 }
 
 // ─── Devices ───────────────────────────────────────────────────────────────────
@@ -152,7 +163,7 @@ export interface DeviceList {
   total: number;
 }
 export async function getDevices(): Promise<DeviceList> {
-  return request<DeviceList>('/web/api/devices/');
+  return request('/web/api/devices/');
 }
 
 export interface TelemetryRecord {
@@ -165,7 +176,7 @@ export interface DeviceTelemetry {
   telemetry: { records: TelemetryRecord[]; total: number };
 }
 export async function getDevice(deviceId: string, limit = 20): Promise<DeviceTelemetry> {
-  return request<DeviceTelemetry>(
+  return request(
     `/web/api/devices/${encodeURIComponent(deviceId)}?limit=${limit}`
   );
 }
@@ -184,7 +195,7 @@ export async function sendCommand(
   deviceId: string,
   body: CommandRequest
 ): Promise<CommandResponse> {
-  return request<CommandResponse>(
+  return request(
     `/web/api/devices/${encodeURIComponent(deviceId)}/command`,
     { method: 'POST', body: JSON.stringify(body) }
   );
@@ -211,16 +222,16 @@ export interface LogLines {
   search_filter: string | null;
 }
 export async function getLogFiles(): Promise<LogFileList> {
-  return request<LogFileList>('/web/api/logs/list');
+  return request('/web/api/logs/list');
 }
 export async function getLogFile(
   filename: string,
   params: { level?: string; search?: string; lines?: number } = {}
 ): Promise<LogLines> {
   const q = new URLSearchParams();
-  if (params.level)  q.set('level', params.level);
+  if (params.level) q.set('level', params.level);
   if (params.search) q.set('search', params.search);
-  if (params.lines)  q.set('lines', String(params.lines));
+  if (params.lines) q.set('lines', String(params.lines));
   const qs = q.toString() ? `?${q.toString()}` : '';
-  return request<LogLines>(`/web/api/logs/${encodeURIComponent(filename)}${qs}`);
+  return request(`/web/api/logs/${encodeURIComponent(filename)}${qs}`);
 }

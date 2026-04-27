@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch';
 import { getGatewayStatus, getGatewayConfig } from '../api/client';
 import Spinner from '../components/Spinner';
@@ -7,24 +8,21 @@ import ErrorBox from '../components/ErrorBox';
 function StatCard({
   label,
   value,
-  icon,
   accent = 'blue',
 }: {
   label: string;
   value: string | number | undefined;
-  icon: string;
   accent?: 'blue' | 'teal' | 'orange' | 'slate';
 }) {
   const accentMap = {
-    blue:   'border-blue-600 bg-blue-50 text-blue-800',
-    teal:   'border-teal-600 bg-teal-50 text-teal-800',
-    orange: 'border-orange-500 bg-orange-50 text-orange-800',
-    slate:  'border-slate-500 bg-slate-50 text-slate-800',
+    blue:   'border-blue-500 bg-blue-50 text-blue-600',
+    teal:   'border-teal-500 bg-teal-50 text-teal-600',
+    orange: 'border-orange-500 bg-orange-50 text-orange-600',
+    slate:  'border-slate-500 bg-slate-50 text-slate-600',
   };
   return (
     <div className={`rounded-xl border-2 p-5 ${accentMap[accent]}`}>
       <div className="flex items-center gap-3 mb-2">
-        <span className="text-2xl" aria-hidden>{icon}</span>
         <span className="text-sm font-bold uppercase tracking-wide opacity-70">{label}</span>
       </div>
       <p className="text-3xl font-black">{value ?? '—'}</p>
@@ -32,7 +30,6 @@ function StatCard({
   );
 }
 
-// ─── Section header ───────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
@@ -44,8 +41,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 // ─── DashboardPage ────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { data: status, loading: sl, error: se, refetch: sr } = useFetch(() => getGatewayStatus(), []);
-  const { data: config, loading: cl, error: ce, refetch: cr } = useFetch(() => getGatewayConfig(), []);
+  const { data: status, loading: sl, error: se, unauthorized: su, refetch: sr } = useFetch(() => getGatewayStatus(), []);
+  const { data: config, loading: cl, error: ce, unauthorized: cu, refetch: cr } = useFetch(() => getGatewayConfig(), []);
+
+  if (su || cu) return <Navigate to="/login" replace />;
 
   const loading = sl || cl;
 
@@ -59,7 +58,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-10">
-      {/* Page title */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-black text-gray-900">Статус шлюза</h1>
         <button
@@ -76,17 +74,15 @@ export default function DashboardPage() {
 
       {status && (
         <>
-          {/* Overview */}
           <Section title="Общие сведения">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <StatCard label="Имя" value={status.general?.name} icon="🏷️" accent="blue" />
-              <StatCard label="Статус" value={status.general?.running ? 'Работает' : 'Остановлен'} icon={status.general?.running ? '✅' : '🛑'} accent={status.general?.running ? 'teal' : 'orange'} />
-              <StatCard label="Аптайм" value={fmtUptime(status.uptime_seconds)} icon="⏱️" accent="slate" />
-              <StatCard label="Устройств" value={status.devices?.total} icon="📡" accent="blue" />
+              <StatCard label="Имя" value={status.general?.name} accent="blue" />
+              <StatCard label="Статус" value={status.general?.running ? 'Работает' : 'Остановлен'} accent={status.general?.running ? 'teal' : 'orange'} />
+              <StatCard label="Аптайм" value={fmtUptime(status.uptime)} accent="slate" />
+              <StatCard label="Устройств" value={status.devices?.total} accent="blue" />
             </div>
           </Section>
 
-          {/* Adapters */}
           {status.adapters && Object.keys(status.adapters).length > 0 && (
             <Section title="Адаптеры">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -125,34 +121,31 @@ export default function DashboardPage() {
             </Section>
           )}
 
-          {/* Bus */}
           {status.bus && (
             <Section title="Шина сообщений">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                <StatCard label="Опубликовано" value={status.bus.published} icon="📤" accent="blue" />
-                <StatCard label="Доставлено"   value={status.bus.delivered} icon="📥" accent="teal" />
-                <StatCard label="Ошибки"        value={status.bus.errors}    icon="❌" accent="orange" />
-                <StatCard label="Очередь"       value={status.bus.queue_size != null ? `${status.bus.queue_size} / ${status.bus.max_queue ?? '?'}` : undefined} icon="📦" accent="slate" />
-                <StatCard label="Подписчики"    value={status.bus.subscribers} icon="👥" accent="slate" />
+                <StatCard label="Опубликовано" value={status.bus.published} accent="blue" />
+                <StatCard label="Доставлено"   value={status.bus.delivered} accent="teal" />
+                <StatCard label="Ошибки"        value={status.bus.errors} accent="orange" />
+                <StatCard label="Очередь"       value={status.bus.queue_size != null ? `${status.bus.queue_size} / ${status.bus.max_queue ?? '?'}` : undefined} accent="slate" />
+                <StatCard label="Подписчики"    value={status.bus.subscribers} accent="slate" />
               </div>
             </Section>
           )}
 
-          {/* Pipeline */}
           {status.pipeline && (
             <Section title="Пайплайн">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <StatCard label="Стадий"    value={status.pipeline.stages}    icon="🔗" accent="blue" />
-                <StatCard label="Обработано" value={status.pipeline.processed} icon="✔️" accent="teal" />
-                <StatCard label="Отфильтровано" value={status.pipeline.filtered} icon="🔽" accent="slate" />
-                <StatCard label="Ошибки"     value={status.pipeline.errors}    icon="❌" accent="orange" />
+                <StatCard label="Стадий"       value={status.pipeline.stages} accent="blue" />
+                <StatCard label="Обработано"   value={status.pipeline.processed} accent="teal" />
+                <StatCard label="Отфильтровано" value={status.pipeline.filtered} accent="slate" />
+                <StatCard label="Ошибки"        value={status.pipeline.errors} accent="orange" />
               </div>
             </Section>
           )}
         </>
       )}
 
-      {/* Config */}
       {config && (
         <Section title="Конфигурация">
           <div className="rounded-xl border-2 border-gray-300 bg-gray-900 overflow-auto max-h-96">

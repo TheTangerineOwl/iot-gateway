@@ -29,7 +29,6 @@
   h3 { @apply text-xl font-bold; }
   h4 { @apply text-lg font-semibold; }
 
-  /* Monospace log output — always light-on-dark for maximum contrast */
   .log-terminal {
     background-color: #0D1117;
     color: #E6EDF3;
@@ -39,10 +38,9 @@
     line-height: 1.7;
   }
 
-  /* Log level colouring — colorblind-safe, all checked for contrast on dark bg */
-  .log-level-debug   { color: #79C0FF; }   /* blue */
-  .log-level-info    { color: #56D364; }   /* bright green — on dark bg, readable */
-  .log-level-warning { color: #F5A623; }   /* amber */
-  .log-level-error   { color: #FF7B72; }   /* salmon-red */
-  .log-level-critical { color: #FF79C6; }  /* pink/magenta — distinct from red */
+  .log-level-debug   { color: #79C0FF; }
+  .log-level-info    { color: #56D364; }
+  .log-level-warning { color: #F5A623; }
+  .log-level-error   { color: #FF7B72; }
+  .log-level-critical { color: #FF79C6; }
 }

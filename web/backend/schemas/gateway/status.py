@@ -1,5 +1,5 @@
 """Схемы для получения публичной конфигурации шлюза."""
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pydantic import (
     BaseModel, ConfigDict, Field, AliasChoices, field_validator,
     ValidationError, computed_field
@@ -308,9 +308,9 @@ class GatewayStatus(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def uptime(self) -> timedelta:
+    def uptime(self) -> float:
         """Время работы шлюза."""
         now = datetime.now(timezone.utc)
         if self.general and self.general.start_time:
-            return now - self.general.start_time
-        return now - now
+            return (now - self.general.start_time).total_seconds()
+        return 0

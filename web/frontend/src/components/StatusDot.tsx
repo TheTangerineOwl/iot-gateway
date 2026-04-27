@@ -1,24 +1,23 @@
 interface Props {
-  active?: boolean;
+  active: boolean;
+  label?: string;
 }
 
-/**
- * Colorblind-safe status indicator:
- * - Uses both colour AND shape/symbol so it is never colour-only.
- * - Active:   teal filled circle  ●  (#008B8B)
- * - Inactive: orange outline circle ○ (#E87722)
- */
-export default function StatusDot({ active }: Props) {
+export default function StatusDot({ active, label }: Props) {
   return (
-    <span
-      aria-label={active ? 'Онлайн' : 'Оффлайн'}
-      title={active ? 'Онлайн' : 'Оффлайн'}
-      className={[
-        'inline-block h-3 w-3 rounded-full border-2 flex-shrink-0',
-        active
-          ? 'bg-teal-600 border-teal-700'          // teal fill
-          : 'bg-transparent border-orange-500',    // orange outline
-      ].join(' ')}
-    />
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className={[
+          'inline-block h-2.5 w-2.5 rounded-full',
+          active ? 'bg-teal-500' : 'bg-gray-400',
+        ].join(' ')}
+        aria-hidden
+      />
+      {label && (
+        <span className={`text-xs font-semibold ${active ? 'text-teal-700' : 'text-gray-500'}`}>
+          {label}
+        </span>
+      )}
+    </span>
   );
 }

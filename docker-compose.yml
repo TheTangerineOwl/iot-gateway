@@ -52,8 +52,8 @@ services:
 
   web:
     build:
-      context: ./web
-      dockerfile: ./Dockerfile
+      context: .
+      dockerfile: web/Dockerfile
     container_name: iot-gateway-web
     depends_on:
       gateway:
