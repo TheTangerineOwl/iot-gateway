@@ -22,13 +22,13 @@ function LiveStream() {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-
+  
     const token = localStorage.getItem('token') ?? '';
     const base  = import.meta.env.VITE_API_BASE ?? '';
-
+  
     setLines([]);
     setActive(true);
-
+  
     try {
       const res = await fetch(
         `${base}/web/api/logs/stream?level=${streamLevel}`,
@@ -37,28 +37,32 @@ function LiveStream() {
           signal: ctrl.signal,
         }
       );
-
+  
       if (!res.ok || !res.body) {
         setActive(false);
         return;
       }
-
+  
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
-
+  
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
+  
         buf += decoder.decode(value, { stream: true });
-        const parts = buf.split('\\n');
-        buf = parts.pop() ?? '';
-
+  
+        // SSE-события разделяются двойным переносом строки
+        const parts = buf.split('\n\n');          // ← '\n\n', не '\\n'
+        buf = parts.pop() ?? '';                  // неполное событие — обратно в буфер
+  
         for (const part of parts) {
-          if (part.startsWith('data: ')) {
-            const line = part.slice(6);
-            setLines(prev => [...prev.slice(-500), line]);
+          for (const line of part.split('\n')) {  // ← '\n', не '\\n'
+            if (line.startsWith('data: ')) {
+              const text = line.slice(6);
+              if (text) setLines(prev => [...prev.slice(-500), text]);
+            }
           }
         }
       }

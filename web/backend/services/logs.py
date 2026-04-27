@@ -122,23 +122,27 @@ async def read_stream_logs(
         logger.error(f'Директория логов {logs_dir} не найдена')
         raise FileNotFoundError('Директория логов не найдена')
 
-    log_files = sorted(
-        [f for f in logs_dir.iterdir() if f.is_file() and f.suffix == ".log"],
-        key=lambda f: f.stat().st_mtime,
-        reverse=True,
-    )
+    def get_active_file() -> Path | None:
+        """Возвращает текущий активный (самый свежий) лог-файл."""
+        files = sorted(
+            [f for f in logs_dir.iterdir()
+             if f.is_file() and f.suffix == ".log"],
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+        return files[0] if files else None
 
-    if not log_files:
+    active_file = get_active_file()
+    if not active_file:
         logger.error('Нет активного лог-файла')
         raise FileNotFoundError('Нет активного лог-файла')
 
-    active_file = log_files[0]
     level_upper = level.upper()
 
     async def event_generator():
+        nonlocal active_file
         with open(active_file, "r", encoding="utf-8", errors="replace") as f:
-            # Перемотать в конец, чтобы стримить только новые строки
-            f.seek(0, 2)
+            f.seek(0, 2)  # перемотать в конец
             while True:
                 line = f.readline()
                 if line:
@@ -146,6 +150,24 @@ async def read_stream_logs(
                     if level_upper == "DEBUG" or f"│ {level_upper}" in line:
                         yield f"data: {line}\n\n"
                 else:
+                    current = get_active_file()
+                    if current and current != active_file:
+                        logger.info(
+                            f'Ротация лога: '
+                            f'{active_file.name} → {current.name}'
+                        )
+                        active_file = current
+                        return
+
                     await asyncio.sleep(0.5)
 
-    return event_generator()
+    async def restartable_generator():
+        while True:
+            async for chunk in event_generator():
+                yield chunk
+
+            active_file = get_active_file()
+            if not active_file:
+                break
+
+    return restartable_generator()
