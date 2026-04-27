@@ -1,85 +1,62 @@
-import { Link } from 'react-router-dom';
-import { getDevices, Device } from '../api/client';
+import { useNavigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch';
+import { getDevices } from '../api/client';
 import Spinner from '../components/Spinner';
 import ErrorBox from '../components/ErrorBox';
 import StatusDot from '../components/StatusDot';
 
-function formatDt(dt?: string): string {
-  if (!dt) return '—';
-  try { return new Date(dt).toLocaleString('ru-RU', { hour12: false }); } catch { return dt; }
-}
-
-function isOnline(lastSeen?: string): boolean | null {
-  if (!lastSeen) return null;
-  const diff = Date.now() - new Date(lastSeen).getTime();
-  return diff < 2 * 60 * 1000; // < 2 мин — online
-}
-
-function DeviceRow({ d }: { d: Device }) {
-  const online = isOnline(d.last_seen);
-  return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50 text-xs">
-      <td className="px-3 py-2">
-        <Link to={`/devices/${encodeURIComponent(d.device_id)}`} className="text-blue-600 hover:underline font-medium">
-          {d.device_id}
-        </Link>
-      </td>
-      <td className="px-3 py-2 text-gray-600">{d.name ?? '—'}</td>
-      <td className="px-3 py-2 text-gray-500">{d.protocol ?? '—'}</td>
-      <td className="px-3 py-2 text-gray-500">{formatDt(d.last_seen)}</td>
-      <td className="px-3 py-2">
-        <span className="flex items-center gap-1.5">
-          <StatusDot ok={online} />
-          <span className="text-gray-500">{online == null ? '?' : online ? 'online' : 'offline'}</span>
-        </span>
-      </td>
-    </tr>
-  );
-}
-
 export default function DevicesPage() {
   const { data, loading, error, refetch } = useFetch(() => getDevices(), []);
+  const navigate = useNavigate();
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="font-semibold text-gray-800">
-          Устройства{data ? ` (${data.total})` : ''}
-        </h1>
-        <button
-          onClick={refetch}
-          className="text-xs px-3 py-1 rounded border border-gray-200 bg-white text-gray-500 hover:border-gray-400"
-          title="Обновить"
-        >
-          ↻
-        </button>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-gray-800">
+          Устройства {data ? <span className="text-gray-400 font-normal">({data.total})</span> : null}
+        </h2>
+        <button onClick={refetch} className="text-xs text-gray-400 hover:text-gray-700">↺ Обновить</button>
       </div>
 
-      {loading && <Spinner />}
+      {loading && <Spinner label="Загрузка…" />}
       {error && <ErrorBox message={error} onRetry={refetch} />}
 
-      {data && (
-        data.devices.length === 0 ? (
-          <p className="text-xs text-gray-400">Нет зарегистрированных устройств.</p>
-        ) : (
-          <div className="overflow-x-auto border border-gray-200 rounded bg-white">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {['ID', 'Имя', 'Протокол', 'Последняя активность', 'Статус'].map(h => (
-                    <th key={h} className="px-3 py-2 text-gray-500 font-medium uppercase tracking-wider text-[10px]">
-                      {h}
-                    </th>
-                  ))}
+      {data && data.devices.length === 0 && (
+        <p className="text-xs text-gray-400">Устройства не найдены.</p>
+      )}
+
+      {data && data.devices.length > 0 && (
+        <div className="border border-gray-200 rounded bg-white overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-3 py-2 text-gray-500 font-medium">ID</th>
+                <th className="text-left px-3 py-2 text-gray-500 font-medium">Имя</th>
+                <th className="text-left px-3 py-2 text-gray-500 font-medium">Протокол</th>
+                <th className="text-left px-3 py-2 text-gray-500 font-medium">Последний визит</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.devices.map((d, i) => (
+                <tr
+                  key={d.device_id}
+                  onClick={() => navigate(`/devices/${encodeURIComponent(d.device_id)}`)}
+                  className={`cursor-pointer hover:bg-blue-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                >
+                  <td className="px-3 py-2 font-mono text-gray-700 flex items-center gap-1">
+                    <StatusDot active={!!d.last_seen} />
+                    {d.device_id}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600">{d.name ?? '—'}</td>
+                  <td className="px-3 py-2 text-gray-500">{d.protocol ?? '—'}</td>
+                  <td className="px-3 py-2 text-gray-400">
+                    {d.last_seen ? new Date(d.last_seen).toLocaleString('ru') : '—'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {data.devices.map(d => <DeviceRow key={d.device_id} d={d} />)}
-              </tbody>
-            </table>
-          </div>
-        )
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

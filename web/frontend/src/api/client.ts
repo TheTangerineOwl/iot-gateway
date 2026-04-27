@@ -219,38 +219,30 @@ export async function sendCommand(deviceId: string, body: CommandRequest): Promi
 
 // ─── Logs ────────────────────────────────────────────────────────────────────
 
-export interface LogFileList {
-  files: string[];
-  total: number;
-}
-
-export async function getLogFiles(): Promise<LogFileList> {
-  return request<LogFileList>('/web/api/logs/list');
+export interface LogFile {
+  filename: string;
+  size_bytes: number;
+  modified_at: string;
+  is_active: boolean;
 }
 
 export interface LogLines {
-  filename: string;
   lines: string[];
   total: number;
 }
 
-export async function getLogFile(
-  filename: string,
-  params?: { lines?: number; level?: string; search?: string }
-): Promise<LogLines> {
-  const q = new URLSearchParams();
-  if (params?.lines) q.set('lines', String(params.lines));
-  if (params?.level) q.set('level', params.level);
-  if (params?.search) q.set('search', params.search);
-  const qs = q.toString() ? `?${q}` : '';
-  return request<LogLines>(`/web/api/logs/${encodeURIComponent(filename)}${qs}`);
+export async function getLogFiles(): Promise<LogFile[]> {
+  return request<LogFile[]>('/web/api/logs/files');
 }
 
-export function streamLogs(level = 'INFO'): EventSource {
-  const token = getToken();
-  // SSE не поддерживает headers — передаём токен через query (если бэкенд поддерживает)
-  // Иначе — подключаемся без токена (CORS allow * уже настроен)
-  return new EventSource(
-    `${BASE}/web/api/logs/stream?level=${level}${token ? `&token=${token}` : ''}`
-  );
+export async function getLogFile(
+  filename: string,
+  params: { level?: string; search?: string; lines?: number } = {}
+): Promise<LogLines> {
+  const q = new URLSearchParams();
+  if (params.level) q.set('level', params.level);
+  if (params.search) q.set('search', params.search);
+  if (params.lines) q.set('lines', String(params.lines));
+  const qs = q.toString() ? `?${q.toString()}` : '';
+  return request<LogLines>(`/web/api/logs/files/${encodeURIComponent(filename)}${qs}`);
 }

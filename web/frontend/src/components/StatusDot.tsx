@@ -1,11 +1,11 @@
 interface Props {
-  ok?: boolean | null;
-  size?: 'sm' | 'md';
+  active?: boolean;
 }
 
-export default function StatusDot({ ok, size = 'sm' }: Props) {
-  const sz = size === 'sm' ? 'w-2 h-2' : 'w-3 h-3';
-  const color =
-    ok == null ? 'bg-gray-300' : ok ? 'bg-green-500' : 'bg-red-500';
-  return <span className={`inline-block rounded-full ${sz} ${color} shrink-0`} />;
+export default function StatusDot({ active }: Props) {
+  return (
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${active ? 'bg-green-500' : 'bg-gray-300'}`}
+    />
+  );
 }

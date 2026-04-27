@@ -1,17 +1,10 @@
-import { useState } from 'react';
-import { getGatewayStatus, getGatewayConfig, GatewayStatus, GatewayConfig } from '../api/client';
 import { useFetch } from '../hooks/useFetch';
+import { getGatewayStatus, getGatewayConfig, GatewayStatus } from '../api/client';
 import Spinner from '../components/Spinner';
 import ErrorBox from '../components/ErrorBox';
 import StatusDot from '../components/StatusDot';
 
-function fmt(val: unknown): string {
-  if (val == null) return '—';
-  if (typeof val === 'boolean') return val ? 'да' : 'нет';
-  return String(val);
-}
-
-function formatUptime(seconds?: number): string {
+function uptime(seconds?: number): string {
   if (seconds == null) return '—';
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -19,197 +12,103 @@ function formatUptime(seconds?: number): string {
   return `${h}ч ${m}м ${s}с`;
 }
 
-function formatDatetime(dt?: string): string {
-  if (!dt) return '—';
-  try {
-    return new Date(dt).toLocaleString('ru-RU', { hour12: false });
-  } catch {
-    return dt;
-  }
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-5">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">{title}</h2>
-      <div className="border border-gray-200 rounded bg-white divide-y divide-gray-100">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function Row({ label, value, dot }: { label: string; value: React.ReactNode; dot?: boolean | null }) {
-  return (
-    <div className="flex items-start justify-between px-3 py-1.5 gap-4 text-xs">
-      <span className="text-gray-500 shrink-0">{label}</span>
-      <span className="text-gray-800 text-right flex items-center gap-2">
-        {dot != null && <StatusDot ok={dot} />}
-        {value}
-      </span>
+    <div className="border border-gray-200 rounded bg-white p-4 flex flex-col gap-2">
+      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</h3>
+      {children}
     </div>
   );
 }
 
-function StatusBlock({ status }: { status: GatewayStatus }) {
-  const { general, devices, bus, pipeline, adapters, uptime_seconds } = status;
-
+function KV({ k, v }: { k: string; v: React.ReactNode }) {
   return (
-    <>
-      <Section title="Шлюз">
-        <Row label="Имя" value={fmt(general?.name)} />
-        <Row label="ID" value={fmt(general?.id)} />
-        <Row label="Запущен" value={fmt(general?.running)} dot={general?.running} />
-        <Row label="Старт" value={formatDatetime(general?.start_time)} />
-        {uptime_seconds != null && <Row label="Uptime" value={formatUptime(uptime_seconds)} />}
-      </Section>
-
-      <Section title="Устройства">
-        <Row label="Всего" value={fmt(devices?.total)} />
-        <Row label="Online" value={fmt(devices?.online_count)} />
-      </Section>
-
-      <Section title="Очередь сообщений">
-        <Row label="Опубликовано" value={fmt(bus?.published)} />
-        <Row label="Доставлено" value={fmt(bus?.delivered)} />
-        <Row label="Ошибки" value={fmt(bus?.errors)} />
-        <Row label="В очереди" value={`${fmt(bus?.queue_size)} / ${fmt(bus?.max_queue)}`} />
-        <Row label="Подписчики" value={fmt(bus?.subscribers)} />
-      </Section>
-
-      <Section title="Pipeline">
-        <Row label="Этапы" value={fmt(pipeline?.stages)} />
-        <Row label="Обработано" value={fmt(pipeline?.processed)} />
-        <Row label="Отфильтровано" value={fmt(pipeline?.filtered)} />
-        <Row label="Ошибки" value={fmt(pipeline?.errors)} />
-      </Section>
-
-      {adapters && Object.keys(adapters).length > 0 && (
-        <Section title="Адаптеры">
-          {Object.entries(adapters).map(([name, a]) => (
-            <Row
-              key={name}
-              label={name.toUpperCase()}
-              dot={a.running}
-              value={
-                <span className="flex flex-col items-end gap-0.5">
-                  <span>{a.running ? 'running' : 'stopped'}</span>
-                  {a.connections != null && <span className="text-gray-400">conn: {a.connections}</span>}
-                  {a.connected != null && <span className="text-gray-400">broker: {a.connected ? 'ok' : 'off'}</span>}
-                </span>
-              }
-            />
-          ))}
-        </Section>
-      )}
-    </>
+    <div className="flex items-center justify-between text-xs gap-2">
+      <span className="text-gray-400">{k}</span>
+      <span className="text-gray-800 font-mono">{v ?? '—'}</span>
+    </div>
   );
 }
 
-function ConfigBlock({ config }: { config: GatewayConfig }) {
-  const g = config.general_config;
-  const adapters = config.adapter_configs;
+function StatusSection({ status }: { status: GatewayStatus }) {
+  const { general, devices, bus, pipeline, adapters, uptime_seconds } = status;
 
   return (
-    <>
-      {g?.general && (
-        <Section title="Конфигурация шлюза">
-          <Row label="Имя" value={fmt(g.general.name)} />
-          <Row label="ID" value={fmt(g.general.id)} />
-          <Row label="Хранилище" value={fmt(g.general.storage)} />
-        </Section>
-      )}
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <Card title="Общее">
+        <KV k="ID" v={general?.id} />
+        <KV k="Имя" v={general?.name} />
+        <KV k="Статус" v={
+          <span className="flex items-center gap-1">
+            <StatusDot active={general?.running} />
+            {general?.running ? 'работает' : 'остановлен'}
+          </span>
+        } />
+        <KV k="Аптайм" v={uptime(uptime_seconds)} />
+        <KV k="Запуск" v={general?.start_time ? new Date(general.start_time).toLocaleString('ru') : '—'} />
+      </Card>
 
-      {g?.devices && (
-        <Section title="Реестр устройств">
-          <Row label="Макс. устройств" value={fmt(g.devices.max_devices)} />
-          <Row label="Таймаут stale (с)" value={fmt(g.devices.timeout_stale)} />
-          <Row label="Интервал проверки (с)" value={fmt(g.devices.check_interval)} />
-        </Section>
-      )}
+      <Card title="Устройства">
+        <KV k="Всего" v={devices?.total} />
+        <KV k="Онлайн" v={devices?.online_count} />
+      </Card>
 
-      {g?.bus && (
-        <Section title="Шина сообщений">
-          <Row label="Макс. очередь" value={fmt(g.bus.max_queue)} />
-          <Row label="Таймаут (с)" value={fmt(g.bus.timeout)} />
-        </Section>
-      )}
+      <Card title="Шина сообщений">
+        <KV k="Опубликовано" v={bus?.published} />
+        <KV k="Доставлено" v={bus?.delivered} />
+        <KV k="Ошибок" v={bus?.errors} />
+        <KV k="Очередь" v={bus?.queue_size != null ? `${bus.queue_size} / ${bus.max_queue ?? '?'}` : '—'} />
+        <KV k="Подписчиков" v={bus?.subscribers} />
+      </Card>
 
-      {g?.logger && (
-        <Section title="Логирование">
-          <Row label="Директория" value={fmt(g.logger.dir)} />
-          <Row label="Уровень" value={fmt(g.logger.level)} />
-          <Row label="Debug" value={fmt(g.logger.debug)} dot={g.logger.debug ?? null} />
-        </Section>
-      )}
+      <Card title="Конвейер">
+        <KV k="Этапов" v={pipeline?.stages} />
+        <KV k="Обработано" v={pipeline?.processed} />
+        <KV k="Отфильтровано" v={pipeline?.filtered} />
+        <KV k="Ошибок" v={pipeline?.errors} />
+      </Card>
 
       {adapters && Object.keys(adapters).length > 0 && (
-        <Section title="Адаптеры">
+        <Card title="Адаптеры">
           {Object.entries(adapters).map(([name, a]) => (
-            <Row
-              key={name}
-              label={name.toUpperCase()}
-              dot={a.enabled}
-              value={
-                <span className="flex flex-col items-end gap-0.5">
-                  {a.host && a.port && <span>{a.host}:{a.port}</span>}
-                  {a.url_root && <span className="text-gray-400">{String(a.url_root)}</span>}
-                  {a.timeout_reject != null && <span className="text-gray-400">reject: {String(a.timeout_reject)}с</span>}
-                </span>
-              }
-            />
+            <div key={name} className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">{name}</span>
+              <span className="flex items-center gap-1 text-gray-800">
+                <StatusDot active={a.running ?? a.connected} />
+                {a.protocol ?? ''}
+                {a.connections != null ? ` (${a.connections} соед.)` : ''}
+              </span>
+            </div>
           ))}
-        </Section>
+        </Card>
       )}
-    </>
+    </div>
   );
 }
 
 export default function DashboardPage() {
-  const statusQ = useFetch(() => getGatewayStatus(), []);
-  const configQ = useFetch(() => getGatewayConfig(), []);
-  const [tab, setTab] = useState<'status' | 'config'>('status');
+  const { data: status, loading: sl, error: se, refetch: sr } = useFetch(() => getGatewayStatus(), []);
+  const { data: config, loading: cl, error: ce, refetch: cr } = useFetch(() => getGatewayConfig(), []);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="font-semibold text-gray-800">Статус шлюза</h1>
-        <div className="flex gap-1">
-          {(['status', 'config'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`text-xs px-3 py-1 rounded border transition-colors ${
-                tab === t
-                  ? 'bg-gray-800 text-white border-gray-800'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-              }`}
-            >
-              {t === 'status' ? 'Статус' : 'Конфигурация'}
-            </button>
-          ))}
-          <button
-            onClick={() => { statusQ.refetch(); configQ.refetch(); }}
-            className="text-xs px-3 py-1 rounded border border-gray-200 bg-white text-gray-500 hover:border-gray-400 ml-2"
-            title="Обновить"
-          >
-            ↻
-          </button>
-        </div>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-gray-800">Статус шлюза</h2>
+        <button onClick={() => { sr(); cr(); }} className="text-xs text-gray-400 hover:text-gray-700">↺ Обновить</button>
       </div>
 
-      {tab === 'status' && (
-        statusQ.loading ? <Spinner /> :
-        statusQ.error ? <ErrorBox message={statusQ.error} onRetry={statusQ.refetch} /> :
-        statusQ.data ? <StatusBlock status={statusQ.data} /> :
-        null
-      )}
+      {(sl || cl) && <Spinner label="Загрузка…" />}
+      {se && <ErrorBox message={se} onRetry={sr} />}
+      {ce && <ErrorBox message={ce} onRetry={cr} />}
+      {status && <StatusSection status={status} />}
 
-      {tab === 'config' && (
-        configQ.loading ? <Spinner /> :
-        configQ.error ? <ErrorBox message={configQ.error} onRetry={configQ.refetch} /> :
-        configQ.data ? <ConfigBlock config={configQ.data} /> :
-        null
+      {config && (
+        <div className="flex flex-col gap-2">
+          <h3 className="font-semibold text-gray-700 text-xs uppercase tracking-wider">Конфигурация</h3>
+          <pre className="bg-gray-900 text-gray-300 rounded p-3 text-[11px] font-mono overflow-x-auto">
+            {JSON.stringify(config, null, 2)}
+          </pre>
+        </div>
       )}
     </div>
   );

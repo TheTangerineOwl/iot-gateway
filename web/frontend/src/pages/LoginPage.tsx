@@ -1,27 +1,23 @@
-import { FormEvent, useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login, setToken, isAuthenticated } from '../api/client';
+import { login, setToken } from '../api/client';
 
 export default function LoginPage() {
-  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    if (isAuthenticated()) navigate('/', { replace: true });
-  }, [navigate]);
-
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    setLoading(true);
     try {
-      const data = await login(username, password);
-      setToken(data.access_token);
+      const res = await login(username, password);
+      setToken(res.access_token);
       navigate('/', { replace: true });
-    } catch (err: unknown) {
+    } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка входа');
     } finally {
       setLoading(false);
@@ -29,47 +25,36 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 font-mono">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white border border-gray-200 rounded p-8 w-full max-w-xs flex flex-col gap-4"
-      >
-        <h1 className="text-base font-semibold text-gray-800 mb-2">IoT Gateway — вход</h1>
-
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 font-mono text-sm">
+      <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded p-6 w-72 flex flex-col gap-3">
+        <h1 className="font-semibold text-gray-700 text-base">IoT Gateway</h1>
         {error && (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
             {error}
-          </p>
+          </div>
         )}
-
-        <label className="flex flex-col gap-1 text-xs text-gray-600">
+        <label className="flex flex-col gap-0.5 text-xs text-gray-500">
           Логин
           <input
-            type="text"
             value={username}
             onChange={e => setUsername(e.target.value)}
-            required
-            autoComplete="username"
-            className="border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:border-blue-400"
+            className="border border-gray-200 rounded px-2 py-1 bg-white text-gray-900"
+            autoFocus
           />
         </label>
-
-        <label className="flex flex-col gap-1 text-xs text-gray-600">
+        <label className="flex flex-col gap-0.5 text-xs text-gray-500">
           Пароль
           <input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            className="border border-gray-300 rounded px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:border-blue-400"
+            className="border border-gray-200 rounded px-2 py-1 bg-white text-gray-900"
           />
         </label>
-
         <button
           type="submit"
           disabled={loading}
-          className="mt-2 bg-gray-800 text-white text-sm rounded px-4 py-2 hover:bg-gray-700 disabled:opacity-50"
+          className="mt-1 px-3 py-1.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:opacity-50"
         >
           {loading ? 'Вход…' : 'Войти'}
         </button>

@@ -1,236 +1,147 @@
-import { useState, FormEvent } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getDevice, sendCommand, TelemetryRecord, CommandRequest } from '../api/client';
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useFetch } from '../hooks/useFetch';
+import { getDevice, sendCommand } from '../api/client';
 import Spinner from '../components/Spinner';
 import ErrorBox from '../components/ErrorBox';
-import StatusDot from '../components/StatusDot';
-
-function formatDt(dt?: string): string {
-  if (!dt) return '—';
-  try { return new Date(dt).toLocaleString('ru-RU', { hour12: false }); } catch { return dt; }
-}
-
-function isOnline(lastSeen?: string): boolean | null {
-  if (!lastSeen) return null;
-  return Date.now() - new Date(lastSeen).getTime() < 2 * 60 * 1000;
-}
-
-function TelemetryRow({ rec }: { rec: TelemetryRecord }) {
-  return (
-    <tr className="border-b border-gray-100 text-xs align-top">
-      <td className="px-3 py-1.5 text-gray-400 whitespace-nowrap">{formatDt(rec.timestamp)}</td>
-      <td className="px-3 py-1.5 text-gray-700">
-        <pre className="whitespace-pre-wrap break-all font-mono text-[11px]">
-          {JSON.stringify(rec.payload, null, 2)}
-        </pre>
-      </td>
-    </tr>
-  );
-}
-
-function CommandPanel({ deviceId }: { deviceId: string }) {
-  const [cmd, setCmd] = useState('');
-  const [params, setParams] = useState('');
-  const [timeout, setTimeout2] = useState('10');
-  const [result, setResult] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setResult(null);
-    setErr(null);
-    setLoading(true);
-    try {
-      let parsedParams: Record<string, unknown> | undefined;
-      if (params.trim()) {
-        parsedParams = JSON.parse(params);
-      }
-      const body: CommandRequest = {
-        command: cmd,
-        params: parsedParams,
-        timeout: parseFloat(timeout) || 10,
-      };
-      const res = await sendCommand(deviceId, body);
-      setResult(JSON.stringify(res, null, 2));
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <section className="mt-6">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
-        Отправить команду
-      </h2>
-      <form onSubmit={handleSubmit} className="border border-gray-200 rounded bg-white p-3 flex flex-col gap-2">
-        <div className="flex gap-2">
-          <label className="flex flex-col gap-0.5 text-xs text-gray-500 flex-1">
-            Команда *
-            <input
-              value={cmd}
-              onChange={e => setCmd(e.target.value)}
-              required
-              placeholder="ping"
-              className="border border-gray-300 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-blue-400"
-            />
-          </label>
-          <label className="flex flex-col gap-0.5 text-xs text-gray-500 w-20">
-            Таймаут (с)
-            <input
-              value={timeout}
-              onChange={e => setTimeout2(e.target.value)}
-              type="number"
-              min="0"
-              className="border border-gray-300 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-blue-400"
-            />
-          </label>
-        </div>
-        <label className="flex flex-col gap-0.5 text-xs text-gray-500">
-          Параметры (JSON, необязательно)
-          <textarea
-            value={params}
-            onChange={e => setParams(e.target.value)}
-            rows={2}
-            placeholder='{"key": "value"}'
-            className="border border-gray-300 rounded px-2 py-1 text-xs font-mono resize-none focus:outline-none focus:border-blue-400"
-          />
-        </label>
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={loading || !cmd.trim()}
-            className="text-xs px-3 py-1.5 rounded bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-50"
-          >
-            {loading ? 'Отправка…' : 'Отправить'}
-          </button>
-          {err && <span className="text-red-600 text-xs">{err}</span>}
-        </div>
-        {result && (
-          <pre className="mt-1 text-[11px] font-mono bg-gray-50 border border-gray-200 rounded p-2 whitespace-pre-wrap break-all text-gray-700">
-            {result}
-          </pre>
-        )}
-      </form>
-    </section>
-  );
-}
 
 export default function DeviceDetailPage() {
   const { deviceId } = useParams<{ deviceId: string }>();
+  const navigate = useNavigate();
   const [limit, setLimit] = useState(20);
+  const [command, setCommand] = useState('');
+  const [params, setParams] = useState('');
+  const [cmdResult, setCmdResult] = useState<string | null>(null);
+  const [cmdError, setCmdError] = useState<string | null>(null);
+  const [cmdLoading, setCmdLoading] = useState(false);
 
   const { data, loading, error, refetch } = useFetch(
     () => getDevice(deviceId!, limit),
     [deviceId, limit]
   );
 
-  const device = data?.device;
-  const telemetry = data?.telemetry;
-  const online = isOnline(device?.last_seen);
+  async function handleSendCommand(e: React.FormEvent) {
+    e.preventDefault();
+    if (!deviceId || !command.trim()) return;
+    setCmdResult(null);
+    setCmdError(null);
+    setCmdLoading(true);
+    try {
+      let parsedParams: Record<string, unknown> | undefined;
+      if (params.trim()) {
+        parsedParams = JSON.parse(params);
+      }
+      const res = await sendCommand(deviceId, { command: command.trim(), params: parsedParams });
+      setCmdResult(JSON.stringify(res, null, 2));
+    } catch (e) {
+      setCmdError(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setCmdLoading(false);
+    }
+  }
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-4 text-xs text-gray-400">
-        <Link to="/devices" className="hover:text-gray-700">← Устройства</Link>
-        <span>/</span>
-        <span className="text-gray-700 font-medium">{deviceId}</span>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <button onClick={() => navigate('/devices')} className="text-xs text-gray-400 hover:text-gray-700">← Назад</button>
+        <h2 className="font-semibold text-gray-800 font-mono">{deviceId}</h2>
       </div>
 
-      {loading && <Spinner />}
+      {loading && <Spinner label="Загрузка…" />}
       {error && <ErrorBox message={error} onRetry={refetch} />}
 
-      {device && (
+      {data && (
         <>
-          {/* Info */}
-          <section className="mb-5">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1.5">Устройство</h2>
-            <div className="border border-gray-200 rounded bg-white divide-y divide-gray-100">
-              {[
-                ['ID', device.device_id],
-                ['Имя', device.name ?? '—'],
-                ['Протокол', device.protocol ?? '—'],
-                ['Зарегистрировано', formatDt(device.registered_at)],
-                ['Последняя активность', formatDt(device.last_seen)],
-              ].map(([label, value]) => (
-                <div key={label} className="flex justify-between px-3 py-1.5 text-xs">
-                  <span className="text-gray-500">{label}</span>
-                  <span className="text-gray-800">{value}</span>
-                </div>
-              ))}
-              <div className="flex justify-between px-3 py-1.5 text-xs">
-                <span className="text-gray-500">Статус</span>
-                <span className="flex items-center gap-1.5">
-                  <StatusDot ok={online} />
-                  <span className="text-gray-800">{online == null ? '?' : online ? 'online' : 'offline'}</span>
-                </span>
-              </div>
-              {device.metadata && Object.keys(device.metadata).length > 0 && (
-                <div className="flex justify-between px-3 py-1.5 text-xs">
-                  <span className="text-gray-500">Metadata</span>
-                  <pre className="text-[11px] text-gray-600 font-mono text-right">
-                    {JSON.stringify(device.metadata, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </section>
+          {/* Device info */}
+          <div className="border border-gray-200 rounded bg-white p-4 text-xs flex flex-col gap-1">
+            <div className="flex justify-between"><span className="text-gray-400">Имя</span><span>{data.device.name ?? '—'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Протокол</span><span>{data.device.protocol ?? '—'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Зарегистрирован</span><span>{data.device.registered_at ? new Date(data.device.registered_at).toLocaleString('ru') : '—'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Последний визит</span><span>{data.device.last_seen ? new Date(data.device.last_seen).toLocaleString('ru') : '—'}</span></div>
+          </div>
 
           {/* Telemetry */}
-          <section className="mb-5">
-            <div className="flex items-center justify-between mb-1.5">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-                Телеметрия{telemetry ? ` (${telemetry.total})` : ''}
-              </h2>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-gray-600">
+                Телеметрия <span className="font-normal text-gray-400">({data.telemetry.total})</span>
+              </h3>
               <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-500 flex items-center gap-1">
-                  строк:
-                  <select
-                    value={limit}
-                    onChange={e => setLimit(Number(e.target.value))}
-                    className="border border-gray-200 rounded px-1 py-0.5 text-xs bg-white"
-                  >
-                    {[10, 20, 50, 100].map(n => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  onClick={refetch}
-                  className="text-xs px-2 py-0.5 rounded border border-gray-200 bg-white text-gray-500 hover:border-gray-400"
-                  title="Обновить"
-                >↻</button>
+                <select
+                  value={limit}
+                  onChange={e => setLimit(Number(e.target.value))}
+                  className="border border-gray-200 rounded px-2 py-0.5 text-xs bg-white"
+                >
+                  {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <button onClick={refetch} className="text-xs text-gray-400 hover:text-gray-700">↺</button>
               </div>
             </div>
-
-            {telemetry && telemetry.records.length === 0 ? (
-              <p className="text-xs text-gray-400">Нет записей телеметрии.</p>
+            {data.telemetry.records.length === 0 ? (
+              <p className="text-xs text-gray-400">Нет записей.</p>
             ) : (
-              <div className="overflow-x-auto border border-gray-200 rounded bg-white">
-                <table className="w-full text-left">
+              <div className="border border-gray-200 rounded bg-white overflow-hidden">
+                <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      {['Время', 'Данные'].map(h => (
-                        <th key={h} className="px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-gray-500">
-                          {h}
-                        </th>
-                      ))}
+                      <th className="text-left px-3 py-2 text-gray-500 font-medium">Время</th>
+                      <th className="text-left px-3 py-2 text-gray-500 font-medium">Данные</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {telemetry?.records.map((rec, i) => (
-                      <TelemetryRow key={i} rec={rec} />
+                    {data.telemetry.records.map((r, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-3 py-2 text-gray-400 whitespace-nowrap">
+                          {new Date(r.timestamp).toLocaleString('ru')}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-gray-700">
+                          {JSON.stringify(r.payload)}
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
-          </section>
+          </div>
 
-          <CommandPanel deviceId={deviceId!} />
+          {/* Send command */}
+          <div className="border border-gray-200 rounded bg-white p-4 flex flex-col gap-3">
+            <h3 className="text-xs font-semibold text-gray-600">Отправить команду</h3>
+            <form onSubmit={handleSendCommand} className="flex flex-col gap-2 text-xs">
+              <label className="flex flex-col gap-0.5 text-gray-500">
+                Команда
+                <input
+                  value={command}
+                  onChange={e => setCommand(e.target.value)}
+                  placeholder="ping"
+                  className="border border-gray-200 rounded px-2 py-1 bg-white font-mono"
+                />
+              </label>
+              <label className="flex flex-col gap-0.5 text-gray-500">
+                Параметры (JSON)
+                <input
+                  value={params}
+                  onChange={e => setParams(e.target.value)}
+                  placeholder='{"key": "value"}'
+                  className="border border-gray-200 rounded px-2 py-1 bg-white font-mono"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={cmdLoading || !command.trim()}
+                className="self-start px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {cmdLoading ? 'Отправка…' : 'Отправить'}
+              </button>
+            </form>
+            {cmdError && <ErrorBox message={cmdError} />}
+            {cmdResult && (
+              <pre className="bg-gray-900 text-green-400 rounded p-2 text-[11px] font-mono overflow-x-auto">
+                {cmdResult}
+              </pre>
+            )}
+          </div>
         </>
       )}
     </div>
