@@ -61,8 +61,13 @@ def get_database_url(settings: Settings) -> str:
     pg_user = os.getenv("STORAGE__POSTGRESQL__USER__USERNAME")
     pg_password = os.getenv("STORAGE__POSTGRESQL__USER__PASSWORD")
     pg_dbname = os.getenv("STORAGE__POSTGRESQL__DBNAME")
+    use_db = os.getenv("GATEWAY__GENERAL__STORAGE_TYPE")
 
-    if all([pg_host, pg_user, pg_password, pg_dbname]):
+    if (
+        use_db
+        and use_db.lower() in ['postgres', 'postgresql']
+        and all([pg_host, pg_user, pg_password, pg_dbname])
+    ):
         # PostgreSQL async URL
         url = (
             f"postgresql+asyncpg://{pg_user}:{pg_password}"

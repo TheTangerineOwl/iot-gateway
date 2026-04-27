@@ -15,6 +15,7 @@ IoT Gateway Web UI — FastAPI приложение.
 """
 import logging
 import os
+from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -27,12 +28,17 @@ from web.backend.dependencies.config import get_settings
 from web.backend.routers import auth, devices, gateway, logs
 
 
+BASE_DIR = Path(__file__).parent.parent
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s │ %(levelname)-8s │ %(name)-30s │ %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+ENV_FILE = BASE_DIR.parent / '.env'
+loaded_env = load_dotenv(ENV_FILE)
 
 
 @asynccontextmanager
@@ -43,6 +49,8 @@ async def lifespan(app: FastAPI):
     Выполняет инициализацию БД при старте и закрытие при завершении.
     """
     settings = get_settings()
+    if loaded_env:
+        logger.info(f"Переменные окружения загружены из {ENV_FILE}")
     logger.info("Инициализация БД...")
     await init_db(settings)
     logger.info("БД инициализирована")
@@ -106,7 +114,7 @@ app.include_router(gateway.router, prefix="/web/api/gateway")
 app.include_router(devices.router, prefix="/web/api/devices")
 app.include_router(logs.router, prefix="/web/api/logs")
 
-_static_dir = Path(__file__).parent.parent / "static"
+_static_dir = BASE_DIR / "static"
 
 
 @app.get(

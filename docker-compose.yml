@@ -47,6 +47,12 @@ services:
     restart: unless-stopped
     ports:
       - "${ADAPTERS__MQTT__BROKER__PORT:-1883}:1883"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+      - "mosquitto-config:/opt/mosquitto/config"
+      - "mosquitto-data:/opt/mosquitto/data"
+      - "mosquitto-log:/opt/mosquitto/log"
     networks:
       - iot-net
 
@@ -79,6 +85,9 @@ volumes:
   postgres_data:
   logs:
   data:
+  mosquitto-config:
+  mosquitto-data:
+  mosquitto-log:
 
 networks:
   iot-net:
