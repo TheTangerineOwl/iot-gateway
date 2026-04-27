@@ -4,15 +4,12 @@ const BASE = import.meta.env.VITE_API_BASE ?? '';
 function getToken(): string | null {
   return localStorage.getItem('token');
 }
-
 export function setToken(token: string): void {
   localStorage.setItem('token', token);
 }
-
 export function clearToken(): void {
   localStorage.removeItem('token');
 }
-
 export function isAuthenticated(): boolean {
   return !!getToken();
 }
@@ -35,7 +32,6 @@ async function request<T>(
     window.location.href = '/login';
     throw new Error('Unauthorized');
   }
-
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -44,15 +40,11 @@ async function request<T>(
     } catch {}
     throw new Error(detail);
   }
-
-  // 204 No Content
   if (res.status === 204) return undefined as T;
-
   return res.json() as Promise<T>;
 }
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
-
+// ─── Auth ──────────────────────────────────────────────────────────────────────
 export interface TokenResponse {
   access_token: string;
   token_type: string;
@@ -85,13 +77,11 @@ export interface UserMe {
   id: number;
   username: string;
 }
-
 export async function getMe(): Promise<UserMe> {
   return request<UserMe>('/web/api/auth/me');
 }
 
-// ─── Gateway ─────────────────────────────────────────────────────────────────
-
+// ─── Gateway ───────────────────────────────────────────────────────────────────
 export interface AdapterStatus {
   protocol?: string;
   running?: boolean;
@@ -99,14 +89,12 @@ export interface AdapterStatus {
   connected?: boolean;
   broker?: string;
 }
-
 export interface PipelineStatus {
   stages?: number;
   processed?: number;
   filtered?: number;
   errors?: number;
 }
-
 export interface MessageBusStatus {
   published?: number;
   delivered?: number;
@@ -115,19 +103,16 @@ export interface MessageBusStatus {
   max_queue?: number;
   subscribers?: number;
 }
-
 export interface RegistryStatus {
   total?: number;
   online_count?: number;
 }
-
 export interface GeneralGatewayStatus {
   id?: string;
   name?: string;
   running?: boolean;
   start_time?: string;
 }
-
 export interface GatewayStatus {
   general?: GeneralGatewayStatus;
   devices?: RegistryStatus;
@@ -136,7 +121,6 @@ export interface GatewayStatus {
   adapters?: Record<string, AdapterStatus>;
   uptime_seconds?: number;
 }
-
 export async function getGatewayStatus(): Promise<GatewayStatus> {
   return request<GatewayStatus>('/web/api/gateway/status');
 }
@@ -150,13 +134,11 @@ export interface GatewayConfig {
   };
   adapter_configs?: Record<string, unknown>;
 }
-
 export async function getGatewayConfig(): Promise<GatewayConfig> {
   return request<GatewayConfig>('/web/api/gateway/config');
 }
 
-// ─── Devices ─────────────────────────────────────────────────────────────────
-
+// ─── Devices ───────────────────────────────────────────────────────────────────
 export interface Device {
   device_id: string;
   name?: string;
@@ -165,12 +147,10 @@ export interface Device {
   last_seen?: string;
   metadata?: Record<string, unknown>;
 }
-
 export interface DeviceList {
   devices: Device[];
   total: number;
 }
-
 export async function getDevices(): Promise<DeviceList> {
   return request<DeviceList>('/web/api/devices/');
 }
@@ -180,15 +160,10 @@ export interface TelemetryRecord {
   payload: Record<string, unknown>;
   timestamp: string;
 }
-
 export interface DeviceTelemetry {
   device: Device;
-  telemetry: {
-    records: TelemetryRecord[];
-    total: number;
-  };
+  telemetry: { records: TelemetryRecord[]; total: number };
 }
-
 export async function getDevice(deviceId: string, limit = 20): Promise<DeviceTelemetry> {
   return request<DeviceTelemetry>(
     `/web/api/devices/${encodeURIComponent(deviceId)}?limit=${limit}`
@@ -200,13 +175,11 @@ export interface CommandRequest {
   params?: Record<string, unknown>;
   timeout?: number;
 }
-
 export interface CommandResponse {
   status: string;
   device_id: string;
   command: string;
 }
-
 export async function sendCommand(
   deviceId: string,
   body: CommandRequest
@@ -217,21 +190,18 @@ export async function sendCommand(
   );
 }
 
-// ─── Logs ────────────────────────────────────────────────────────────────────
-
+// ─── Logs ──────────────────────────────────────────────────────────────────────
 export interface LogFile {
   filename: string;
   size_bytes: number;
   modified_at: string;
   is_active: boolean;
 }
-
 export interface LogFileList {
   files: LogFile[];
   total: number;
   logs_dir: string;
 }
-
 export interface LogLines {
   filename: string;
   lines: string[];
@@ -240,27 +210,17 @@ export interface LogLines {
   level_filter: string | null;
   search_filter: string | null;
 }
-
-/**
- * Получение списка лог-файлов.
- * Эндпоинт: GET /web/api/logs/list
- */
 export async function getLogFiles(): Promise<LogFileList> {
   return request<LogFileList>('/web/api/logs/list');
 }
-
-/**
- * Получение содержимого лог-файла.
- * Эндпоинт: GET /web/api/logs/{filename}
- */
 export async function getLogFile(
   filename: string,
   params: { level?: string; search?: string; lines?: number } = {}
 ): Promise<LogLines> {
   const q = new URLSearchParams();
-  if (params.level) q.set('level', params.level);
+  if (params.level)  q.set('level', params.level);
   if (params.search) q.set('search', params.search);
-  if (params.lines) q.set('lines', String(params.lines));
+  if (params.lines)  q.set('lines', String(params.lines));
   const qs = q.toString() ? `?${q.toString()}` : '';
   return request<LogLines>(`/web/api/logs/${encodeURIComponent(filename)}${qs}`);
 }
