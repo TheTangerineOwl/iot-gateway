@@ -25,6 +25,9 @@ class _StubAdapter(ProtocolAdapter):
     async def stop(self) -> None:
         self._running = False
 
+    async def send_command(self, device_id, command, params=None):
+        return await super().send_command(device_id, command, params)
+
 
 @pytest_asyncio.fixture
 async def stub_adapter(

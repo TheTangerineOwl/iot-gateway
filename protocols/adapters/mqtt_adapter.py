@@ -79,7 +79,7 @@ class MQTTAdapter(ProtocolAdapter):
             'tls', {}
         ).get('insecure', False) is True
         # MQTT protocol version (4 for 3.1.1, 5 for 5.0)
-        env_prot_version = self._adapter_config.get('version', '4')
+        env_prot_version = str(self._adapter_config.get('version', '4'))
         if env_prot_version.startswith('5'):
             self.protocol_version = ProtocolVersion.V5
         else:

@@ -624,8 +624,8 @@ class TestMQTTAdapterReconnection:
     """Переподключение при разрыве соединения."""
 
     def test_reconnect_interval_initialized(self, mqtt_adapter: MQTTAdapter):
-        """_reconnect_interval инициализирован на 3.0 сек."""
-        assert mqtt_adapter._reconnect_interval == 3.0
+        """_reconnect_interval инициализирован на 5.0 сек."""
+        assert mqtt_adapter._reconnect_interval == 5.0
 
     def test_max_reconnect_interval_set(self, mqtt_adapter: MQTTAdapter):
         """_max_reconnect_interval установлен на 300.0 сек."""
@@ -636,7 +636,7 @@ class TestMQTTAdapterReconnection:
         self,
         mqtt_adapter: MQTTAdapter
     ):
-        """connect() сбрасывает _reconnect_interval на 3.0."""
+        """connect() сбрасывает _reconnect_interval на 5.0."""
         mqtt_adapter._reconnect_interval = 100.0
 
         with patch(
@@ -647,4 +647,4 @@ class TestMQTTAdapterReconnection:
             # mqtt_adapter._subscribe_topics = AsyncMock()
 
             await mqtt_adapter.connect()
-            assert mqtt_adapter._reconnect_interval == 3.0
+            assert mqtt_adapter._reconnect_interval == 5.0
