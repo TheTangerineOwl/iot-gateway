@@ -201,13 +201,13 @@ def coap_request(payload: bytes = b"") -> CoAPMessage:
     return CoAPMessage(code=COAP_POST, payload=payload)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 def mock_adapter(
     config: YAMLConfigLoader,
     topics: TopicManager
-) -> CoAPAdapter:
+):
     """CoAP-адаптер с mock-шиной (для тестов без реальной шины)."""
-    return _make_adapter(config, topics)
+    yield _make_adapter(config, topics)
 
 
 @pytest.fixture
@@ -228,7 +228,7 @@ def coap_health(mock_adapter: CoAPAdapter) -> _HealthResource:
     return _HealthResource(mock_adapter)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 def mqtt_adapter(
     config: YAMLConfigLoader,
     running_bus: MessageBus,

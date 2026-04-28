@@ -2,6 +2,7 @@
 import pytest
 import pytest_asyncio
 import aiosqlite
+from copy import copy
 from json import loads
 from unittest.mock import AsyncMock
 from storage.sqlite import (
@@ -185,7 +186,7 @@ class TestSQLiteStorage:
             record: TelemetryRecord
         ):
             """Возвращаются все сохраненные записи."""
-            record2 = record
+            record2 = copy(record)
             record2.message_id = 'mes-002'
             await storage.save(record)
             await storage.save(record2)
@@ -213,7 +214,7 @@ class TestSQLiteStorage:
         ):
             """get_by_device() уважает параметр limit."""
             for i in range(5):
-                r = record
+                r = copy(record)
                 r.message_id = f'mes-00{i}'
                 await storage.save(r)
 

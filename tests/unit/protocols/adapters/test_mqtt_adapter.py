@@ -1,7 +1,7 @@
 """Юнит-тесты для MQTTAdapter."""
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from config.topics import TopicKey, TopicManager
 from models.device import ProtocolType
 from protocols.adapters.mqtt_adapter import MQTTAdapter
@@ -71,39 +71,54 @@ class TestMQTTAdapterLifecycle:
     @pytest.mark.asyncio
     async def test_start_sets_running(self, mqtt_adapter: MQTTAdapter):
         """После start() is_running == True."""
-        with patch('asyncio.create_task') as mock_task:
-            mock_task.return_value = AsyncMock()
+        with patch.object(
+            mqtt_adapter, 'run', new_callable=AsyncMock
+        ):
             await mqtt_adapter.start()
+            assert mqtt_adapter._run_task is not None
+            mqtt_adapter._run_task.cancel()
+            try:
+                await mqtt_adapter._run_task
+            except asyncio.CancelledError:
+                pass
             assert mqtt_adapter.is_running is True
 
     @pytest.mark.asyncio
     async def test_start_creates_run_task(self, mqtt_adapter: MQTTAdapter):
         """После start() _run_task не None."""
-        with patch('asyncio.create_task') as mock_task:
-            mock_run_task = AsyncMock()
-            mock_task.return_value = mock_run_task
+        with patch.object(mqtt_adapter, 'run', new_callable=AsyncMock):
             await mqtt_adapter.start()
             assert mqtt_adapter._run_task is not None
+            mqtt_adapter._run_task.cancel()
+            try:
+                await mqtt_adapter._run_task
+            except asyncio.CancelledError:
+                pass
 
     @pytest.mark.asyncio
     async def test_stop_clears_running(self, mqtt_adapter: MQTTAdapter):
         """После stop() is_running == False."""
-        with patch('asyncio.create_task') as mock_task:
-            mock_task.return_value = AsyncMock()
+        with patch.object(mqtt_adapter, 'run', new_callable=AsyncMock):
             await mqtt_adapter.start()
+            assert mqtt_adapter._run_task is not None
             await mqtt_adapter.stop()
             assert mqtt_adapter.is_running is False
 
     @pytest.mark.asyncio
     async def test_stop_calls_disconnect(self, mqtt_adapter: MQTTAdapter):
         """stop() вызывает disconnect."""
-        with patch('asyncio.create_task') as mock_task:
-            mock_task.return_value = AsyncMock()
+        with patch.object(mqtt_adapter, 'run', new_callable=AsyncMock):
             await mqtt_adapter.start()
             with patch.object(
                 mqtt_adapter, 'disconnect', new_callable=AsyncMock
             ) as mock_disconnect:
                 await mqtt_adapter.stop()
+                assert mqtt_adapter._run_task is not None
+                mqtt_adapter._run_task.cancel()
+                try:
+                    await mqtt_adapter._run_task
+                except asyncio.CancelledError:
+                    pass
                 mock_disconnect.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -120,10 +135,15 @@ class TestMQTTAdapterLifecycle:
         mqtt_adapter: MQTTAdapter
     ):
         """Повторный start() не бросает исключения."""
-        with patch('asyncio.create_task') as mock_task:
-            mock_task.return_value = AsyncMock()
+        with patch.object(mqtt_adapter, 'run', new_callable=AsyncMock):
             await mqtt_adapter.start()
             await mqtt_adapter.start()
+            assert mqtt_adapter._run_task is not None
+            mqtt_adapter._run_task.cancel()
+            try:
+                await mqtt_adapter._run_task
+            except asyncio.CancelledError:
+                pass
             assert mqtt_adapter.is_running is True
 
 
@@ -156,7 +176,6 @@ class TestMQTTAdapterConnection:
         ) as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
-            # mqtt_adapter._subscribe_topics = AsyncMock()
 
             # Симулируем успешное подключение
             await mqtt_adapter.connect()
@@ -490,7 +509,7 @@ class TestMQTTAdapterCleanup:
         mqtt_adapter: MQTTAdapter
     ):
         """_cleanup() пропускает уже отменённую задачу."""
-        mock_task = AsyncMock()
+        mock_task = MagicMock()
         mock_task.done.return_value = True
         mqtt_adapter._message_task = mock_task
 
@@ -612,11 +631,16 @@ class TestMQTTAdapterContextIntegration:
         mqtt_adapter: MQTTAdapter
     ):
         """health_check 'running' == True после start()."""
-        with patch('asyncio.create_task') as mock_task:
-            mock_task.return_value = AsyncMock()
+        with patch.object(mqtt_adapter, 'run', new_callable=AsyncMock):
             await mqtt_adapter.start()
             result = await mqtt_adapter._health_check()
-            assert result['running'] is True
+            assert mqtt_adapter._run_task is not None
+            mqtt_adapter._run_task.cancel()
+            try:
+                await mqtt_adapter._run_task
+            except asyncio.CancelledError:
+                pass
+            assert result.get('running', None) is True
 
 
 @pytest.mark.unit

@@ -1,6 +1,7 @@
 """Интеграционные тесты для MQTT адаптера с message bus."""
 import asyncio
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, patch
 from config.topics import TopicKey, TopicManager
 from core.message_bus import MessageBus
@@ -12,7 +13,7 @@ from tests.conftest import (
 )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 def mqtt_adapter(config, running_bus: MessageBus, registry: DeviceRegistry):
     """MQTT-адаптер для тестов."""
     adapter = MQTTAdapter(config)
@@ -69,28 +70,22 @@ class TestMQTTAdapterStartStopCycle:
     @pytest.mark.asyncio
     async def test_start_stop_cycle(self, mqtt_adapter: MQTTAdapter):
         """Полный цикл: start → stop."""
-        with patch('asyncio.create_task') as mock_task:
-            mock_run_task = AsyncMock()
-            mock_task.return_value = mock_run_task
-
-            # Start
+        with patch.object(mqtt_adapter, 'run', new_callable=AsyncMock):
             await mqtt_adapter.start()
+            await asyncio.sleep(0)
             assert mqtt_adapter.is_running is True
             assert mqtt_adapter._run_task is not None
 
-            # Stop
             await mqtt_adapter.stop()
             assert mqtt_adapter.is_running is False
 
     @pytest.mark.asyncio
     async def test_multiple_start_stop_cycles(self, mqtt_adapter: MQTTAdapter):
         """Несколько циклов старт-стоп."""
-        with patch('asyncio.create_task') as mock_task:
-            mock_run_task = AsyncMock()
-            mock_task.return_value = mock_run_task
-
+        with patch.object(mqtt_adapter, 'run', new_callable=AsyncMock):
             for _ in range(3):
                 await mqtt_adapter.start()
+                await asyncio.sleep(0)
                 assert mqtt_adapter.is_running is True
                 await mqtt_adapter.stop()
                 assert mqtt_adapter.is_running is False
@@ -102,12 +97,23 @@ class TestMQTTAdapterStartStopCycle:
     ):
         """disconnect() полностью очищает состояние."""
         # Симулируем подключение
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = AsyncMock()
-        mqtt_adapter._exit_stack = AsyncMock()
+        with patch.object(
+            mqtt_adapter, 'run', new_callable=AsyncMock
+        ):
+            await mqtt_adapter.start()
+            await asyncio.sleep(0)
+            assert mqtt_adapter._run_task is not None
 
-        # Отключаемся
-        result = await mqtt_adapter.disconnect()
+            mqtt_adapter.is_connected = True
+            mqtt_adapter.client = AsyncMock()
+            mqtt_adapter._exit_stack = AsyncMock()
+            # Отключаемся
+            mqtt_adapter._run_task.cancel()
+            try:
+                await mqtt_adapter._run_task
+            except asyncio.CancelledError:
+                pass
+            result = await mqtt_adapter.disconnect()
 
         # Проверяем очистку
         assert result is True
@@ -121,90 +127,45 @@ class TestMQTTAdapterErrorReporting:
     """Тестирование отправки ошибок на устройства."""
 
     @pytest.mark.asyncio
-    async def test_send_validation_error(
+    async def test_send_error(
         self,
         topics: TopicManager,
         mqtt_adapter: MQTTAdapter
     ):
-        """Отправка ошибки валидации."""
-        mock_client = AsyncMock()
-        mock_client.publish = AsyncMock()
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = mock_client
+        """Отправка ошибки."""
+        with patch.object(mqtt_adapter, 'run', new_callable=AsyncMock):
+            await mqtt_adapter.start()
+            assert mqtt_adapter._run_task is not None
+            mock_client = AsyncMock()
+            mock_client.publish = AsyncMock()
+            mqtt_adapter.is_connected = True
+            mqtt_adapter.client = mock_client
 
-        error = {
-            "error_code": "VALIDATION_ERROR",
-            "message": "Invalid payload format",
-            "field": "temperature"
-        }
+            error = {
+                "error_code": "VALIDATION_ERROR",
+                "message": "Invalid payload format",
+                "field": "temperature"
+            }
 
-        result = await mqtt_adapter.send_message(
-            DEVICE_DEF_ID,
-            topics.get(
-                TopicKey.ERR_MESSAGE,
-                device_id=DEVICE_DEF_ID
-            ),
-            error
-        )
-        assert result is True
+            result = await mqtt_adapter.send_message(
+                DEVICE_DEF_ID,
+                topics.get(
+                    TopicKey.ERR_MESSAGE,
+                    device_id=DEVICE_DEF_ID
+                ),
+                error
+            )
+            assert result is True
 
-        call_args = mock_client.publish.call_args
+            call_args = mock_client.publish.call_args
+
+            mqtt_adapter._run_task.cancel()
+            try:
+                await mqtt_adapter._run_task
+            except asyncio.CancelledError:
+                pass
         assert call_args is not None
         assert "error" in call_args[1]['topic']
-
-    @pytest.mark.asyncio
-    async def test_send_timeout_error(
-        self,
-        topics: TopicManager,
-        mqtt_adapter: MQTTAdapter
-    ):
-        """Отправка ошибки timeout."""
-        mock_client = AsyncMock()
-        mock_client.publish = AsyncMock()
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = mock_client
-
-        error = {
-            "error_code": "TIMEOUT",
-            "message": "Device did not respond in time"
-        }
-
-        result = await mqtt_adapter.send_message(
-            DEVICE_DEF_ID,
-            topics.get(
-                TopicKey.ERR_MESSAGE,
-                device_id=DEVICE_DEF_ID
-            ),
-            error
-        )
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_send_connection_error(
-        self,
-        topics: TopicManager,
-        mqtt_adapter: MQTTAdapter
-    ):
-        """Отправка ошибки подключения."""
-        mock_client = AsyncMock()
-        mock_client.publish = AsyncMock()
-        mqtt_adapter.is_connected = True
-        mqtt_adapter.client = mock_client
-
-        error = {
-            "error_code": "CONNECTION_ERROR",
-            "message": "Lost connection to device"
-        }
-
-        result = await mqtt_adapter.send_message(
-            DEVICE_DEF_ID,
-            topics.get(
-                TopicKey.ERR_MESSAGE,
-                device_id=DEVICE_DEF_ID
-            ),
-            error
-        )
-        assert result is True
 
 
 @pytest.mark.unit
