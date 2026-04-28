@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
-from time import time
+from datetime import datetime, timezone
 from typing import Any
 import uuid
 
@@ -55,6 +55,7 @@ class ProtocolType(str, Enum):
     WEBSOCKET = 'WebSocket'
     COAP = 'CoAP'
     MODBUS = 'Modbus'
+    HTTP_GATEWAY = 'HTTP Gateway Management'
     UNKNOWN = 'Unknown'
 
     @classmethod
@@ -76,17 +77,22 @@ class Device:
     device_status: DeviceStatus = DeviceStatus.OFFLINE
     protocol: ProtocolType = ProtocolType.UNKNOWN
     last_response: float = 0.0
-    created_at: float = field(default_factory=time)
+    created_at: float = field(
+        default_factory=lambda: datetime.now(tz=timezone.utc).timestamp()
+    )
+    metadata: dict = field(default_factory=dict)
 
     def touch(self):
         """Обновляет время последнего обращения."""
-        self.last_response = time()
+        self.last_response = datetime.now(tz=timezone.utc).timestamp()
 
     def is_stale(self, timeout: float = 300.0):
         """Проверяет, отвечает ли устройство."""
         if self.last_response == 0.0:
             return True
-        return (time() - self.last_response) > timeout
+        return (
+            datetime.now(tz=timezone.utc).timestamp() - self.last_response
+        ) > timeout
 
     def to_dict(self) -> dict[str, Any]:
         """Вывод информации о девайсе."""
@@ -98,6 +104,7 @@ class Device:
             "device_status": self.device_status.value,
             "last_response": self.last_response,
             "created_at": self.created_at,
+            "metadata": self.metadata
         }
 
     @classmethod
@@ -123,6 +130,9 @@ class Device:
                 data.get("last_response", 0.0)
             ),
             created_at=float(
-                data.get("created_at", time())
+                data.get(
+                    "created_at", datetime.now(tz=timezone.utc).timestamp()
+                )
             ),
+            metadata=data.get('metadata', dict())
         )

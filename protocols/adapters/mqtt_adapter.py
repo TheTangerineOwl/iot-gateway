@@ -16,7 +16,7 @@ from contextlib import AsyncExitStack
 from aiomqtt import Client, MqttError, TLSParameters, ProtocolVersion
 import ssl
 from config.config import YAMLConfigLoader
-from config.topics import TopicKey
+from config.topics import TopicKey, TopicManager
 from protocols.adapters.base import ProtocolAdapter
 from models.message import Message, MessageType
 from models.device import ProtocolType
@@ -79,7 +79,7 @@ class MQTTAdapter(ProtocolAdapter):
             'tls', {}
         ).get('insecure', False) is True
         # MQTT protocol version (4 for 3.1.1, 5 for 5.0)
-        env_prot_version = self._adapter_config.get('version', '4')
+        env_prot_version = str(self._adapter_config.get('version', '4'))
         if env_prot_version.startswith('5'):
             self.protocol_version = ProtocolVersion.V5
         else:
@@ -255,7 +255,8 @@ class MQTTAdapter(ProtocolAdapter):
     async def send_command(
         self,
         device_id: str,
-        command: Dict[str, Any]
+        command: str,
+        params: Optional[Dict[str, Any]] = None
     ) -> bool:
         """Отправить команду на девайс через MQTT топик."""
         if not self.is_connected or not self.client:
@@ -267,21 +268,20 @@ class MQTTAdapter(ProtocolAdapter):
         try:
             if self._topics is None:
                 raise RuntimeError('Topic manager is not set')
-            topic = self._topics.get(
+            topic = self.get_topic(
                 TopicKey.DEVICES_COMMAND,
                 device_id=device_id
             )
-            payload = json.dumps(command)
-
-            await self.client.publish(
-                topic=topic,
-                payload=payload,
-                qos=self.qos,
-                retain=False
+            payload: dict[str, Any] = {
+                "command": command, "params": params or {}
+            }
+            success = await self.send_message(
+                device_id, topic, payload
             )
 
-            logger.debug(f"Command published to {device_id}")
-            return True
+            if success:
+                logger.info(f"Command published to {device_id}")
+            return success
 
         except MqttError as e:
             logger.exception(
@@ -300,12 +300,11 @@ class MQTTAdapter(ProtocolAdapter):
 
         try:
 
-            subscriptions = self._adapter_config.get(
-                'topics', {}
-            ).get('subscriptions', {})
+            subscriptions = self._adapter_config.get('subscriptions', {})
 
             for k, v in subscriptions.items():
                 topic = v.get('topic')
+
                 qos = int(v.get('qos', 1))
                 await self.client.subscribe(topic, qos=qos)
                 logger.info(
@@ -365,6 +364,15 @@ class MQTTAdapter(ProtocolAdapter):
             except json.JSONDecodeError:
                 logger.warning(f"Invalid JSON payload: {payload_str[:100]}")
                 payload = {"raw": payload_str}
+
+            if TopicManager.matches(
+                topic,
+                self.get_sub_pattern(
+                    TopicKey.DEVICES_COMMAND_RESPONSE
+                )
+            ):
+                await self._handle_command_response(device_id, payload)
+                return
 
             message_type, message_topic = self._parse_message_type(
                 message_category,
@@ -461,13 +469,9 @@ class MQTTAdapter(ProtocolAdapter):
 
     async def health_check(self) -> Dict[str, Any]:
         """Вернуть статус адаптера."""
-        return {
-            "adapter": self.protocol_name,
+        base_health = await super()._health_check()
+        base_health.update({
             "connected": self.is_connected,
             "broker": f"{self.broker_host}:{self.broker_port}",
-            "client_id": self.client_id,
-            "protocol_version": f"MQTT {self.protocol_version}",
-            "qos": self.qos,
-            "tls_enabled": self.use_tls,
-            "keepalive": self.keepalive,
-        }
+        })
+        return base_health

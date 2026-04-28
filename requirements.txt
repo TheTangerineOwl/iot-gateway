@@ -1,32 +1,11 @@
-aiocoap==0.4.17
-aiohappyeyeballs==2.6.1
-aiohttp==3.13.5
-aiomqtt==2.5.1
-aiosignal==1.4.0
-aiosqlite==0.22.1
-asyncio==4.0.0
-attrs==26.1.0
-colorama==0.4.6
-frozenlist==1.8.0
-idna==3.11
-iniconfig==2.3.0
-mirakuru==3.0.2
-multidict==6.7.1
-packaging==26.0
-paho-mqtt==2.1.0
-pluggy==1.6.0
-port-for==1.0.0
-propcache==0.4.1
-psutil==7.2.2
-psycopg==3.3.3
-psycopg-binary==3.3.3
-Pygments==2.20.0
-pytest==9.0.2
-pytest-asyncio==1.3.0
-pytest-postgresql==8.0.0
-python-dotenv==1.2.2
-PyYAML==6.0.3
-typenv==0.2.0
-types-PyYAML==6.0.12.20260408
-tzdata==2026.1
-yarl==1.23.0
+# В случае проблем, связанных с пакетами или версиями,
+# следует обратиться к `help/frozen_requirements.txt`
+
+# Базовые требования проекта
+-r ./base_requirements.txt
+
+# Требования для тестов
+-r ./tests/requirements.txt
+
+# Требования для веб-приложения
+-r ./web/requirements.txt

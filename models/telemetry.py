@@ -1,6 +1,6 @@
 """Модель записи телеметрии для хранилища."""
 from dataclasses import dataclass, field
-from time import time
+from datetime import datetime, timezone
 from typing import Any
 from models.device import ProtocolType
 
@@ -11,7 +11,9 @@ class TelemetryRecord:
 
     device_id: str
     payload: dict[str, Any]
-    timestamp: float = field(default_factory=time)
+    timestamp: float = field(
+        default_factory=lambda: datetime.now(tz=timezone.utc).timestamp()
+    )
     message_id: str = ''
     protocol: ProtocolType = ProtocolType.UNKNOWN
 
@@ -35,7 +37,9 @@ class TelemetryRecord:
         return cls(
             device_id=str(dic.get('device_id', '')),
             payload=dic.get('payload', {}),
-            timestamp=float(dic.get('timestamp', time())),
+            timestamp=float(dic.get(
+                'timestamp', datetime.now(tz=timezone.utc).timestamp())
+            ),
             message_id=str(dic.get('message_id', '')),
             protocol=ProtocolType(dic.get('protocol', ProtocolType.UNKNOWN))
         )

@@ -1,0 +1,11 @@
+aiocoap~=0.4.17
+aiohttp~=3.13.5
+aiomqtt~=2.5.1
+aiosqlite~=0.22.1
+psycopg~=3.3.3
+psycopg-binary~=3.3.3
+PyYAML~=6.0.3
+typenv~=0.2.0
+
+# Стабы
+types-PyYAML~=6.0.12.20260408
