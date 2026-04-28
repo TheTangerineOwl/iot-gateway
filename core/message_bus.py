@@ -60,6 +60,7 @@ class MessageBus:
             "delivered": self._delivered_count,
             "errors": self._error_count,
             "queue_size": self._queue.qsize(),
+            "max_queue": self._queue.maxsize,
             "subscribers": len(self._subscriptions),
         }
 

@@ -158,7 +158,7 @@ env.bak/
 venv.bak/
 .env.*
 !.env.example
-!.env.testing.example
+!.env.*.example
 
 # Spyder project settings
 .spyderproject
@@ -225,3 +225,7 @@ drafts/
 config/configuration/**/*/running.yaml
 config/configuration/**/*/default.yaml
 config/configuration/**/*/testing.yaml
+config/configuration/public_config_whitelist.txt
+
+static
+node_modules

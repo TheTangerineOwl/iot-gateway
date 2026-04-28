@@ -8,7 +8,7 @@
     GET /api/v1/health чек
 """
 import asyncio
-from aiohttp import web
+from aiohttp import web, ClientSession, ClientTimeout, ClientError
 from http import HTTPStatus
 import json
 import logging
@@ -34,7 +34,7 @@ class HTTPAdapter(ProtocolAdapter):
             self.protocol_name.lower()
         )
         self._host: str = self._adapter_config.get('host', '0.0.0.0')
-        self._port: int = self._adapter_config.get('post', 8081)
+        self._port: int = self._adapter_config.get('port', 8081)
 
         self._root_url: str = self._adapter_config.get('url_root', '/api/v1')
         self._endpoints: dict[str, str] = self._adapter_config.get(
@@ -53,10 +53,20 @@ class HTTPAdapter(ProtocolAdapter):
             self._root_url
             + self._endpoints.get('health', '/heatlh')
         )
+        self._url_commands: str = (
+            self._root_url
+            + self._endpoints.get('commands', '/devices/{device_id}/commands')
+        )
 
         self._app: web.Application | None = None
         self._runner: web.AppRunner | None = None
         self._timeout: float = self._adapter_config.get('timeout_reject', 0.5)
+
+        self._command_queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
+        self._http_session: ClientSession | None = None
+        self._cmd_timeout: float = float(
+            self._adapter_config.get('command_timeout', 5.0)
+        )
 
     @property
     def protocol_type(self) -> ProtocolType:
@@ -75,11 +85,15 @@ class HTTPAdapter(ProtocolAdapter):
                     'content-type', 'x-device-token',
                     'user-agent', 'x-correlation-id'
                 )
-            }
+            },
+
+            'callback_url': request.remote
         }
 
     async def start(self) -> None:
         """Запустить HTTP-сервера."""
+        self._http_session = ClientSession()
+
         self._app = web.Application()
         self._app.router.add_post(
             self._wh_telemetry,
@@ -93,18 +107,16 @@ class HTTPAdapter(ProtocolAdapter):
             self._url_health,
             self._handle_health
         )
+        self._app.router.add_get(
+            self._url_commands,
+            self._handle_poll_commands,
+        )
 
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
 
         site = web.TCPSite(self._runner, self._host, self._port)
         await site.start()
-
-        # assert self._bus is not None
-        # self._bus.subscribe(
-        #     'rejected.telemetry.*',
-        #     self._handle_rejected_base
-        # )
 
         self._running = True
         logger.info(
@@ -117,6 +129,9 @@ class HTTPAdapter(ProtocolAdapter):
     async def stop(self) -> None:
         """Остановить HTTP-сервер."""
         self._running = False
+        if self._http_session and not self._http_session.closed:
+            await self._http_session.close()
+            self._http_session = None
         if self._runner:
             await self._runner.cleanup()
         logger.info("HTTP adapter stopped")
@@ -247,3 +262,155 @@ class HTTPAdapter(ProtocolAdapter):
         logger.log(5, 'HTTP got health check')
 
         return web.json_response(health)
+
+    async def send_command(
+        self,
+        device_id: str,
+        command: str,
+        params: dict[str, Any] | None = None,
+    ) -> bool:
+        """
+        Отправить команду HTTP-устройству.
+
+        Стратегия (выбирается автоматически):
+        1. PUSH через callback_url — если устройство зарегистрировало URL.
+        2. PULL-очередь — команда помещается в очередь, устройство
+        забирает её через GET /devices/{id}/commands.
+
+        Args:
+            device_id: идентификатор устройства.
+            command:   имя команды.
+            params:    параметры команды.
+
+        Returns:
+            True  — команда доставлена (push) или поставлена в очередь (pull).
+            False — адаптер не может доставить команду.
+        """
+        payload: dict[str, Any] = {
+            'command': command,
+            'params': params or {},
+        }
+
+        # Push: callback_url
+        if self._registry is not None:
+            device = self._registry.get(device_id)
+            callback_url: str | None = (
+                device.metadata.get('callback_url') if device else None
+            )
+            if callback_url:
+                return await self._push_command(
+                    device_id,
+                    callback_url,
+                    payload
+                )
+
+        # Pull: internal queue
+        logger.info(
+            "send_command: no callback_url for device '%s', "
+            "queuing command '%s' for pull",
+            device_id, command,
+        )
+        return self._enqueue_command(device_id, payload)
+
+    async def _push_command(
+        self,
+        device_id: str,
+        callback_url: str,
+        payload: dict[str, Any],
+    ) -> bool:
+        """POST команды на callback_url устройства."""
+        if self._http_session is None or self._http_session.closed:
+            logger.error("send_command: HTTP session is not open")
+            return False
+
+        try:
+            async with self._http_session.post(
+                callback_url,
+                json=payload,
+                timeout=ClientTimeout(total=self._cmd_timeout),
+            ) as resp:
+                if resp.status < 300:
+                    logger.info(
+                        "Command '%s' pushed to device '%s' - %s (%d)",
+                        payload['command'],
+                        device_id,
+                        callback_url,
+                        resp.status,
+                    )
+                    return True
+                else:
+                    body = await resp.text()
+                    logger.warning(
+                        "Command push to device '%s' failed: HTTP %d — %s",
+                        device_id, resp.status, body[:200],
+                    )
+                    # Деградируем до очереди, чтобы команда не потерялась
+                    logger.info(
+                        "Falling back to pull queue for device '%s'", device_id
+                    )
+                    return self._enqueue_command(device_id, payload)
+
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Command push timeout for device '%s' (%s)",
+                device_id, callback_url,
+            )
+            return self._enqueue_command(device_id, payload)
+
+        except ClientError as exc:
+            logger.error(
+                "HTTP client error pushing command to device '%s': %s",
+                device_id, exc,
+            )
+            return self._enqueue_command(device_id, payload)
+
+    def _enqueue_command(
+        self, device_id: str, payload: dict[str, Any]
+    ) -> bool:
+        """Поместить команду во внутреннюю очередь для pull-получения."""
+        if device_id not in self._command_queues:
+            self._command_queues[device_id] = asyncio.Queue(maxsize=100)
+        queue = self._command_queues[device_id]
+        try:
+            queue.put_nowait(payload)
+            logger.debug(
+                "Command '%s' enqueued for device '%s' (queue size: %d)",
+                payload['command'], device_id, queue.qsize(),
+            )
+            return True
+        except asyncio.QueueFull:
+            logger.warning(
+                "Command queue full for device '%s', dropping command '%s'",
+                device_id, payload['command'],
+            )
+            return False
+
+    async def _handle_poll_commands(
+        self,
+        request: web.Request
+    ) -> web.Response:
+        """
+        GET /api/v1/devices/{device_id}/commands.
+
+        Устройство без callback-URL опрашивает этот эндпоинт.
+        Возвращает все накопленные команды
+        (до max_batch штук) и очищает очередь.
+        """
+        device_id: str = request.match_info['device_id']
+        max_batch: int = int(request.rel_url.query.get('limit', 10))
+
+        queue = self._command_queues.get(device_id)
+        commands: list[dict[str, Any]] = []
+
+        if queue:
+            while not queue.empty() and len(commands) < max_batch:
+                try:
+                    commands.append(queue.get_nowait())
+                except asyncio.QueueEmpty:
+                    break
+
+        logger.debug(
+            "Poll commands for device '%s': returning %d command(s)",
+            device_id, len(commands),
+        )
+        return web.json_response({'commands': commands}, status=HTTPStatus.OK)

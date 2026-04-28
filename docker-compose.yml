@@ -4,9 +4,9 @@ services:
     container_name: iot-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER:     ${STORAGE__POSTGRESQL__USER__USERNAME:-admin}
+      POSTGRES_USER: ${STORAGE__POSTGRESQL__USER__USERNAME:-admin}
       POSTGRES_PASSWORD: ${STORAGE__POSTGRESQL__USER__PASSWORD:-password}
-      POSTGRES_DB:       ${STORAGE__POSTGRESQL__DBNAME:-iotgateway}
+      POSTGRES_DB: ${STORAGE__POSTGRESQL__DBNAME:-iotgateway}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -31,25 +31,64 @@ services:
         condition: service_healthy
     env_file:
       - .env.docker
-    environment:
-
-      STORAGE_TYPE: postgresql
-      STORAGE_DB_CONNSTR: >-
-        postgresql://${STORAGE__POSTGRESQL__USER__USERNAME:-admin}:${STORAGE__POSTGRESQL__USER__PASSWORD:-password}
-        @postgres:5432/${STORAGE__POSTGRESQL__DBNAME:-iotgateway}?application_name=STORAGE__POSTGRESQL__APP_NAME
     volumes:
-      - ./logs:/app/logs
-      - ./data:/app/data  # на случай fallback на SQLite
+      - logs:/app/logs
+      - data:/app/data
     ports:
       - "${ADAPTERS__HTTP__PORT:-8081}:8081"  # HTTP
       - "${ADAPTERS__WEBSOCKET__PORT:-8082}:8082"  # WebSocket
       - "${ADAPTERS__COAP__PORT:-5683}:5683/udp" # CoAP (UDP)
-      - "${ADAPTERS__MQTT__BROKER__PORT:-1883}:1883/tcp"
     networks:
       - iot-net
 
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: iot-mqtt-broker
+    restart: unless-stopped
+    ports:
+      - "${ADAPTERS__MQTT__BROKER__PORT:-1883}:1883"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+      - "mosquitto-config:/opt/mosquitto/config"
+      - "mosquitto-data:/opt/mosquitto/data"
+      - "mosquitto-log:/opt/mosquitto/log"
+    networks:
+      - iot-net
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    container_name: iot-gateway-web
+    depends_on:
+      gateway:
+        condition: service_started
+    env_file:
+      - .env.docker
+    volumes:
+      - data:/app/data
+      - logs:/app/logs
+    ports:
+      - "${WEB__PORT:-8090}:8090"
+    networks:
+      - iot-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://gateway:8090/docs', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 volumes:
   postgres_data:
+  logs:
+  data:
+  mosquitto-config:
+  mosquitto-data:
+  mosquitto-log:
 
 networks:
   iot-net:
+    driver: bridge

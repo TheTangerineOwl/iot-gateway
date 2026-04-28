@@ -63,7 +63,8 @@ class _IngestResource(resource.Resource):
                     TopicKey.DEVICES_TELEMETRY,
                     device_id=device_id
                 ),
-                message_type=MessageType.TELEMETRY
+                message_type=MessageType.TELEMETRY,
+                proto_meta=self._adapter._build_meta(request)
             )
 
             sub = self._adapter._bus.subscribe(
@@ -169,7 +170,8 @@ class _RegisterResource(resource.Resource):
                 TopicKey.DEVICES_REGISTER,
                 device_id=device_id
             ),
-            message_type=MessageType.REGISTRATION
+            message_type=MessageType.REGISTRATION,
+            proto_meta=self._adapter._build_meta(request)
         )
 
         try:
@@ -233,7 +235,7 @@ class CoAPAdapter(ProtocolAdapter):
             '0.0.0.0'
         )
         self._port: int = self._adapter_config.get(
-            'post',
+            'port',
             5683
         )
 
@@ -340,3 +342,69 @@ class CoAPAdapter(ProtocolAdapter):
     def _path(url: str) -> list[str]:
         """Преобразовать строку URL-пути в список сегментов для aiocoap."""
         return [seg for seg in url.strip('/').split('/') if seg]
+
+    def _build_meta(self, request: aiocoap.Message) -> dict[str, Any]:
+        """Построить метаданные протокола."""
+        return {
+            'callback_url':
+                f'coap://{request.remote.hostinfo}'
+                if request.remote and request.remote.hostinfo else None
+        }
+
+    async def send_command(
+        self,
+        device_id: str,
+        command: str,
+        params: dict[str, Any] | None = None,
+    ) -> bool:
+        """
+        Отправить CON-запрос на CoAP-устройство.
+
+        Требует, чтобы адрес устройства (coap://host:port/command) был известен
+        заранее — например, сохранён в Device.metadata['coap_address'] при
+        получении первого пакета от устройства.
+        """
+        if self._registry is None:
+            return False
+
+        device = self._registry.get(device_id)
+        if device is None:
+            logger.warning(
+                "send_command: device '%s' not found in registry", device_id
+            )
+            return False
+
+        coap_address = device.metadata.get(
+            "coap_address"
+        ) if hasattr(device, "metadata") else None
+        if not coap_address:
+            logger.warning(
+                "send_command: no coap_address for device '%s'. "
+                "Store it in Device.metadata['coap_address'] on first packet.",
+                device_id,
+            )
+            return False
+
+        try:
+            context = await aiocoap.Context.create_client_context()
+            payload_bytes = json.dumps(
+                {"command": command, "params": params or {}}
+            ).encode()
+            request = aiocoap.Message(
+                code=aiocoap.POST,
+                uri=f"{coap_address}/command",
+                payload=payload_bytes,
+            )
+            response = await context.request(request).response
+            logger.info(
+                "CoAP command '%s' sent to device '%s', response code: %s",
+                command, device_id, response.code,
+            )
+            await context.shutdown()
+            return response.code.is_successful()
+        except Exception as exc:
+            logger.error(
+                "send_command: CoAP error for device '%s': %s",
+                device_id, exc, exc_info=True,
+            )
+            return False

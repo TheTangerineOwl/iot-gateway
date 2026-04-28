@@ -1,0 +1,82 @@
+# Здесь перечислен список ключей конфигурации,
+# который возвращается при ее запросе с публичных эндпоинтов.
+# Ключи должны совпадать с иерархией настроек в YAML/.env.
+# Основные настройки шлюза:
+# - Базовая настройка:
+gateway.general.id
+gateway.general.name
+gateway.general.storage_type
+
+# - Настройка регистра устройств:
+gateway.registry.max_devices
+gateway.registry.timeout_stale
+gateway.registry.check_interval
+
+# - Настройка шины сообщений:
+gateway.message_bus.max_queue
+gateway.message_bus.timeout
+
+# - Настройка логирования:
+gateway.logger.dir
+gateway.logger.debug
+gateway.logger.level
+
+# - Настройка общения между веб-приложением и шлюзом
+adapters.management.enabled
+adapters.management.host
+adapters.management.port
+adapters.management.url_root
+adapters.management.endpoints.status
+adapters.management.endpoints.config
+
+# Настройки адаптеров протоколов:
+# - Настройка CoAP:
+adapters.coap.enabled
+adapters.coap.host
+adapters.coap.port
+adapters.coap.url_root
+adapters.coap.endpoints.telemetry
+adapters.coap.endpoints.register
+adapters.coap.endpoints.health
+adapters.coap.timeout_reject
+
+# - Настройка HTTP:
+adapters.http.enabled
+adapters.http.host
+adapters.http.port
+adapters.http.url_root
+adapters.http.endpoints.telemetry
+adapters.http.endpoints.register
+adapters.http.endpoints.health
+adapters.http.timeout_reject
+
+# - Настройка WebSocket:
+adapters.websocket.enabled
+adapters.websocket.host
+adapters.websocket.port
+adapters.websocket.url_root
+adapters.websocket.endpoints.general
+adapters.websocket.endpoints.register_http
+adapters.websocket.endpoints.health_http
+adapters.websocket.timeout_reject
+adapters.websocket.heartbeat
+
+# - Настройка MQTT:
+adapters.mqtt.enabled
+adapters.mqtt.client_id
+adapters.mqtt.broker.host
+adapters.mqtt.broker.port
+adapters.mqtt.version
+adapters.mqtt.keepalive
+adapters.mqtt.qos
+adapters.mqtt.reconnect_delay
+adapters.mqtt.max_reconnect_delay
+adapters.mqtt.timeout_reject
+adapters.mqtt.subscriptions.telemetry.topic
+adapters.mqtt.subscriptions.telemetry.qos
+adapters.mqtt.subscriptions.register.topic
+adapters.mqtt.subscriptions.register.qos
+adapters.mqtt.subscriptions.status.topic
+adapters.mqtt.subscriptions.status.qos
+adapters.mqtt.subscriptions.response.topic
+adapters.mqtt.subscriptions.response.qos

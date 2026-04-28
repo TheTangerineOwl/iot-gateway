@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Colorblind-safe palette:
+       Primary:   #0057B8  (strong blue)
+       Accent:    #E87722  (orange)
+       Success:   #008B8B  (teal/dark-cyan — not pure green)
+       Warning:   #F5A623  (amber/yellow-orange)
+       Danger:    #C0392B  (dark red — used sparingly, never alone as semantic color)
+       Text:      #1A1A2E  (near-black, slightly blue-tinted)
+       Muted:     #4A5568  (dark slate)
+       Surface:   #FFFFFF
+       Border:    #CBD5E0
+    */
+    font-size: 16px;
+  }
+
+  html, body, #root {
+    @apply min-h-screen bg-gray-50 text-gray-900;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.6;
+  }
+
+  h1 { @apply text-3xl font-black tracking-tight; }
+  h2 { @apply text-2xl font-bold tracking-tight; }
+  h3 { @apply text-xl font-bold; }
+  h4 { @apply text-lg font-semibold; }
+
+  .log-terminal {
+    background-color: #0D1117;
+    color: #E6EDF3;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.7;
+  }
+
+  .log-level-debug   { color: #79C0FF; }
+  .log-level-info    { color: #56D364; }
+  .log-level-warning { color: #F5A623; }
+  .log-level-error   { color: #FF7B72; }
+  .log-level-critical { color: #FF79C6; }
+}

@@ -40,7 +40,7 @@ class WebSocketAdapter(ProtocolAdapter):
             '0.0.0.0'
         )
         self._port: int = self._adapter_config.get(
-            'post',
+            'port',
             8082
         )
 
@@ -344,6 +344,9 @@ class WebSocketAdapter(ProtocolAdapter):
             elif msg_type == MessageType.REGISTRATION:
                 await self._process_ws_register(ws, body, meta, device_id)
 
+            elif msg_type == MessageType.COMMAND_RESPONSE:
+                await self._handle_response(ws, body, device_id)
+
             else:
                 await self._send_error(
                     ws, f"Unknown message type: '{msg_type}'", 'UNKNOWN_TYPE'
@@ -459,3 +462,53 @@ class WebSocketAdapter(ProtocolAdapter):
         base = await super()._health_check()
         base['connections'] = len(self._connections)
         return base
+
+    async def send_command(
+        self,
+        device_id: str,
+        command: str,
+        params: dict[str, Any] | None = None,
+    ) -> bool:
+        """Отправить команду через открытое WebSocket-соединение."""
+        ws = self._connections.get(device_id)
+        if ws is None or ws.closed:
+            logger.warning(
+                "send_command: no open WebSocket for device '%s'", device_id
+            )
+            return False
+
+        payload = {
+            "type": "command",
+            "command": command,
+            "params": params or {},
+        }
+        try:
+            await ws.send_json(payload)
+            logger.info(
+                "Command '%s' sent to device '%s' via WebSocket",
+                command, device_id
+            )
+            return True
+        except Exception as exc:
+            logger.error(
+                "send_command: WebSocket error for device '%s': %s",
+                device_id, exc, exc_info=True
+            )
+            return False
+
+    async def _handle_response(
+        self,
+        ws: web.WebSocketResponse,
+        body: dict[str, Any],
+        device_id: str,
+    ) -> None:
+        """Обработать ответ на команду."""
+        message = MessageBuilder.normalize(
+            body,
+            protocol=self.protocol_type,
+            topic=self.get_topic(
+                TopicKey.DEVICES_COMMAND_RESPONSE, device_id=device_id
+            ),
+            message_type=MessageType.COMMAND_RESPONSE,
+        )
+        await self._publish_message(message.message_topic, message)

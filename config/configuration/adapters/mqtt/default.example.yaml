@@ -16,7 +16,7 @@ tls:
   certfile:
   keyfile:
   keyfile_password:
-version: 4
+version: '4'
 keepalive: 60
 qos: 1
 clean_session: true

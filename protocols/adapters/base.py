@@ -5,7 +5,7 @@ import logging
 from typing import Any
 from config.config import YAMLConfigLoader
 from config.topics import TopicKey, TopicManager
-from models.message import Message
+from models.message import Message, MessageType
 from models.device import ProtocolType
 from core.message_bus import MessageBus
 from core.registry import DeviceRegistry
@@ -109,13 +109,47 @@ class ProtocolAdapter(ABC):
         if fut and not fut.done():
             fut.set_result(message)
 
-    # async def send_command(
-    #         self,
-    #         device_id: str,
-    #         commands: str,
-    #         params: dict[str, Any] | None = None
-    # ):
-    #     pass
+    async def _handle_command_response(
+        self,
+        device_id: str,
+        payload: dict[str, Any]
+    ) -> None:
+        """Принять ответ устройства и опубликовать на шину."""
+        message = Message(
+            message_type=MessageType.COMMAND_RESPONSE,
+            device_id=device_id,
+            protocol=self.protocol_type,
+            payload=payload,
+            message_topic=self.get_topic(
+                TopicKey.DEVICES_COMMAND_RESPONSE,
+                device_id=device_id
+            )
+        )
+        await self._publish_message(message.message_topic, message)
+        logger.info(
+            f'Command response from device {device_id}: {payload}'
+        )
+
+    @abstractmethod
+    async def send_command(
+        self,
+        device_id: str,
+        command: str,
+        params: dict[str, Any] | None = None,
+    ) -> bool:
+        """
+        Отправить команду на устройство.
+
+        Args:
+            device_id: идентификатор устройства.
+            command:   имя команды (например, "reboot", "set_interval").
+            params:    произвольные параметры команды.
+
+        Returns:
+            True  — команда доставлена (или поставлена в очередь).
+            False — адаптер не может доставить команду прямо сейчас.
+        """
+        return False
 
     async def _health_check(self) -> dict[str, Any]:
         """Вернуть состояние адаптера."""
