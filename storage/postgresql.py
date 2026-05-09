@@ -1,6 +1,5 @@
 """Хранилище телеметрии на базе PostgreSQL."""
 import asyncio
-from contextlib import contextmanager
 import psycopg
 from psycopg.connection_async import AsyncConnection
 from psycopg.rows import dict_row
@@ -104,18 +103,6 @@ class PostgresStorage(StorageBase):
     ) -> None:
         """Хранилище телеметрии на базе PostgreSQL."""
         self._conn_str = connstr
-
-    @contextmanager
-    async def get_db_connection(self):
-        """Менеджер контекста для PostgreSQL подключения."""
-        self._conn = await AsyncConnection.connect(
-            conninfo=self._conn_str,
-            row_factory=dict_row
-        )
-        try:
-            yield self._conn
-        finally:
-            await self._conn.close()
 
     async def setup(self) -> None:
         """Открыть БД и создать таблицу."""

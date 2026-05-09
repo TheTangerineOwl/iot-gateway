@@ -91,4 +91,4 @@ async def fetch_last_telemetry(
     )
     rows = result.mappings().all()
     telemetry = [Telemetry(**row) for row in rows][:limit]
-    return TelemetryList(telemetry=telemetry, total=len(telemetry))
+    return TelemetryList(records=telemetry, total=len(telemetry))
